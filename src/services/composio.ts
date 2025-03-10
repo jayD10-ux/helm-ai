@@ -10,6 +10,9 @@ const composioToolset = new OpenAIToolSet();
 const oauthState = new Map<string, string>();
 const oauthWindows = new Map<string, Window>();
 
+// Store authentication tokens for MCP servers
+const authTokens = new Map<string, { code: string; state: string }>();
+
 // Connect to an MCP server
 export const connectToMCP = async (url: string): Promise<boolean> => {
   try {
@@ -145,20 +148,44 @@ export const handleOAuthCallback = async (code: string, state: string, serverId?
       return false;
     }
     
-    // Configure the composio toolset with the authentication code
-    await composioToolset.configure({
-      auth: {
-        type: 'oauth',
-        code,
-        state
-      }
-    });
+    // Store the authentication tokens for future use
+    authTokens.set(validServer, { code, state });
     
-    console.log(`Successfully authenticated with server ${validServer}`);
+    console.log(`Successfully stored authentication for server ${validServer}`);
     return true;
   } catch (error) {
     console.error('Error handling OAuth callback:', error);
     return false;
+  }
+};
+
+// Get tools from an authenticated MCP server
+export const getToolsWithAuth = async (server: MCPServer): Promise<any> => {
+  try {
+    console.log(`Getting tools for ${server.url} with authentication`);
+    
+    // Get the authentication tokens for this server
+    const auth = authTokens.get(server.id);
+    
+    if (!auth) {
+      console.error('No authentication tokens found for this server');
+      throw new Error('Authentication required');
+    }
+    
+    // Include the authentication information in the getTools call
+    const tools = await composioToolset.getTools({
+      apps: [server.url],
+      auth: {
+        code: auth.code,
+        state: auth.state
+      }
+    });
+    
+    console.log('Successfully got tools with authentication:', tools);
+    return tools;
+  } catch (error) {
+    console.error('Error getting tools with authentication:', error);
+    throw error;
   }
 };
 
@@ -168,4 +195,5 @@ export default {
   checkOAuthRequired,
   initiateOAuth,
   handleOAuthCallback,
+  getToolsWithAuth,
 };

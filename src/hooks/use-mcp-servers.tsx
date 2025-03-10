@@ -11,6 +11,9 @@ export interface MCPServer {
   status: "connected" | "disconnected" | "pending";
 }
 
+// For development without authentication
+const TEMP_USER_ID = "00000000-0000-0000-0000-000000000000";
+
 export const useMCPServers = () => {
   const { toast } = useToast();
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
@@ -25,18 +28,37 @@ export const useMCPServers = () => {
     try {
       setLoading(true);
       
+      // First check if the user settings record exists for our temp user
+      const { data: existingSettings, error: checkError } = await supabase
+        .from('user_settings')
+        .select('id')
+        .eq('user_id', TEMP_USER_ID)
+        .maybeSingle();
+        
+      // If no settings found for test user, create an empty record
+      if (!existingSettings && !checkError) {
+        await supabase
+          .from('user_settings')
+          .insert({ user_id: TEMP_USER_ID, mcp_servers: [] });
+      }
+      
       const { data, error } = await supabase
         .from('user_settings')
         .select('mcp_servers')
-        .limit(1)
-        .single();
+        .eq('user_id', TEMP_USER_ID)
+        .maybeSingle();
         
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
+        console.error('Error loading MCP servers:', error);
         throw error;
       }
       
       if (data && data.mcp_servers) {
+        console.log('Loaded MCP servers:', data.mcp_servers);
         setMcpServers(data.mcp_servers);
+      } else {
+        console.log('No MCP servers found');
+        setMcpServers([]);
       }
     } catch (error) {
       console.error('Error loading MCP servers:', error);
@@ -56,16 +78,25 @@ export const useMCPServers = () => {
       
       const { error } = await supabase
         .from('user_settings')
-        .upsert({ mcp_servers: servers }, { onConflict: 'user_id' });
+        .upsert({ 
+          user_id: TEMP_USER_ID,
+          mcp_servers: servers 
+        });
         
-      if (error) throw error;
+      if (error) {
+        console.error('Error saving MCP servers:', error);
+        throw error;
+      }
       
+      console.log('Saved MCP servers:', servers);
       setMcpServers(servers);
       
       toast({
         title: "MCP servers saved",
         description: "Your MCP server settings have been saved successfully.",
       });
+      
+      return true;
     } catch (error) {
       console.error('Error saving MCP servers:', error);
       toast({
@@ -73,6 +104,7 @@ export const useMCPServers = () => {
         description: "Failed to save your MCP server settings.",
         variant: "destructive"
       });
+      return false;
     } finally {
       setLoading(false);
     }
@@ -99,7 +131,18 @@ export const useMCPServers = () => {
           description: "Please enter a valid URL for the MCP server.",
           variant: "destructive"
         });
-        return;
+        return null;
+      }
+      
+      // Check for duplicates
+      const isDuplicate = mcpServers.some(server => server.url === url);
+      if (isDuplicate) {
+        toast({
+          title: "Duplicate MCP Server",
+          description: "This MCP server URL has already been added.",
+          variant: "destructive"
+        });
+        return null;
       }
       
       // Add the new server
@@ -108,18 +151,37 @@ export const useMCPServers = () => {
         url: url,
         name: suggestedName,
         connectionType,
-        status: "connected" // We're simulating a successful connection
+        status: "pending" // Start with pending status
       };
       
       const updatedServers = [...mcpServers, newServer];
-      await saveMCPServers(updatedServers);
+      const saveSuccess = await saveMCPServers(updatedServers);
       
-      toast({
-        title: "MCP Server Added",
-        description: `${suggestedName} has been added successfully.`,
-      });
-
-      return newServer;
+      if (saveSuccess) {
+        toast({
+          title: "MCP Server Added",
+          description: `${suggestedName} has been added successfully.`,
+        });
+        
+        // Automatically test the connection
+        testMCPServer(newServer).then(result => {
+          // Update the status based on the test result
+          const serverWithUpdatedStatus = {
+            ...newServer,
+            status: result.success ? "connected" : "disconnected"
+          };
+          
+          const serversWithUpdatedStatus = updatedServers.map(s => 
+            s.id === newServer.id ? serverWithUpdatedStatus : s
+          );
+          
+          saveMCPServers(serversWithUpdatedStatus);
+        });
+        
+        return newServer;
+      }
+      
+      return null;
     } catch (error) {
       console.error('Error adding MCP server:', error);
       toast({
@@ -159,6 +221,8 @@ export const useMCPServers = () => {
         [server.id]: { success: false, message: "Testing connection..." }
       }));
 
+      console.log(`Testing ${server.connectionType} connection to: ${server.url}`);
+
       // For SSE connections
       if (server.connectionType === "sse") {
         let timeoutId: number;
@@ -178,22 +242,35 @@ export const useMCPServers = () => {
               resolve({ success: true, message: "Successfully connected to SSE endpoint" });
             };
             
-            eventSource.onerror = () => {
+            eventSource.onerror = (event) => {
               clearTimeout(timeoutId);
               eventSource.close();
+              console.error('SSE connection error:', event);
               resolve({ success: false, message: "Failed to connect to SSE endpoint" });
             };
           } catch (error) {
             clearTimeout(timeoutId);
+            console.error('Error in SSE connection test:', error);
             reject(error);
           }
         });
         
         const result = await testPromise;
+        console.log(`Test result for ${server.url}:`, result);
+        
         setTestResults(prev => ({
           ...prev,
           [server.id]: result
         }));
+        
+        // Update the server status based on the test result
+        const updatedServers = mcpServers.map(s => 
+          s.id === server.id 
+            ? { ...s, status: result.success ? "connected" : "disconnected" } 
+            : s
+        );
+        
+        saveMCPServers(updatedServers);
         
         return result;
       } 
@@ -202,7 +279,10 @@ export const useMCPServers = () => {
         let timeoutId: number;
         const testPromise = new Promise<{ success: boolean; message: string }>((resolve, reject) => {
           try {
+            // Convert HTTP/HTTPS to WS/WSS
             const wsUrl = server.url.replace(/^http/, 'ws');
+            console.log(`Connecting to WebSocket URL: ${wsUrl}`);
+            
             const socket = new WebSocket(wsUrl);
             
             // Set a timeout to close the connection if it takes too long
@@ -217,25 +297,40 @@ export const useMCPServers = () => {
               resolve({ success: true, message: "Successfully connected to WebSocket endpoint" });
             };
             
-            socket.onerror = () => {
+            socket.onerror = (event) => {
               clearTimeout(timeoutId);
               socket.close();
+              console.error('WebSocket connection error:', event);
               resolve({ success: false, message: "Failed to connect to WebSocket endpoint" });
             };
           } catch (error) {
             clearTimeout(timeoutId);
+            console.error('Error in WebSocket connection test:', error);
             reject(error);
           }
         });
         
         const result = await testPromise;
+        console.log(`Test result for ${server.url}:`, result);
+        
         setTestResults(prev => ({
           ...prev,
           [server.id]: result
         }));
         
+        // Update the server status based on the test result
+        const updatedServers = mcpServers.map(s => 
+          s.id === server.id 
+            ? { ...s, status: result.success ? "connected" : "disconnected" } 
+            : s
+        );
+        
+        saveMCPServers(updatedServers);
+        
         return result;
       }
+      
+      return { success: false, message: "Unknown connection type" };
     } catch (error) {
       console.error('Error testing MCP server:', error);
       const errorResult = { 

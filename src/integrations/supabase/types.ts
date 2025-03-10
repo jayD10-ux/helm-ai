@@ -9,7 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      user_settings: {
+        Row: {
+          allow_code_execution: boolean | null
+          api_key: string | null
+          created_at: string | null
+          custom_instructions: string | null
+          debug_mode: boolean | null
+          id: string
+          mcp_servers: Json | null
+          model_type: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          allow_code_execution?: boolean | null
+          api_key?: string | null
+          created_at?: string | null
+          custom_instructions?: string | null
+          debug_mode?: boolean | null
+          id?: string
+          mcp_servers?: Json | null
+          model_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          allow_code_execution?: boolean | null
+          api_key?: string | null
+          created_at?: string | null
+          custom_instructions?: string | null
+          debug_mode?: boolean | null
+          id?: string
+          mcp_servers?: Json | null
+          model_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

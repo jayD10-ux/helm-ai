@@ -6,7 +6,6 @@ import * as composioCore from 'composio-core';
 console.log('composio-core module contents:', composioCore);
 
 // Create a client that handles MCP connections
-// We'll create a flexible implementation that doesn't assume specific method names
 const composioClient = {
   connectMCPServer: async (url: string) => {
     console.log(`Attempting to connect to MCP server at: ${url}`);
@@ -14,19 +13,36 @@ const composioClient = {
       // Check what's available in the module
       console.log('Available in composioCore:', Object.keys(composioCore));
       
-      // Try multiple possible connection methods
-      if (composioCore.default && typeof composioCore.default === 'function') {
-        const client = composioCore.default();
-        console.log('Created client using default export');
+      // Try using directly exported connect methods
+      if (typeof composioCore.connect === 'function') {
+        console.log('Using composioCore.connect method');
+        return await composioCore.connect(url);
+      }
+      
+      if (typeof composioCore.connectMCP === 'function') {
+        console.log('Using composioCore.connectMCP method');
+        return await composioCore.connectMCP(url);
+      }
+      
+      // Try to find a client constructor or creation function
+      if (typeof composioCore.createClient === 'function') {
+        const client = composioCore.createClient();
+        console.log('Created client using createClient method');
         
-        if (client.connect && typeof client.connect === 'function') {
+        if (client && typeof client.connect === 'function') {
           console.log('Using client.connect method');
           return await client.connect(url);
         }
+      }
+      
+      // Try to instantiate a Client class if it exists
+      if (composioCore.Client && typeof composioCore.Client === 'function') {
+        const client = new composioCore.Client();
+        console.log('Created client using Client constructor');
         
-        if (client.connectMCP && typeof client.connectMCP === 'function') {
-          console.log('Using client.connectMCP method');
-          return await client.connectMCP(url);
+        if (client && typeof client.connect === 'function') {
+          console.log('Using client.connect method');
+          return await client.connect(url);
         }
       }
       

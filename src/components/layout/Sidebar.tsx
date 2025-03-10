@@ -2,7 +2,7 @@
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft, Terminal, MessageSquare, Code, Settings } from "lucide-react";
+import { ChevronLeft, Terminal, MessageSquare, Component, Settings } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 interface NavItemProps {
@@ -37,7 +37,7 @@ const Sidebar = () => {
 
   const navItems = [
     { icon: Terminal, label: "Chat", path: "/" },
-    { icon: Code, label: "Playground", path: "/playground" },
+    { icon: Component, label: "Widgets", path: "/widgets" },
     { icon: MessageSquare, label: "MCPs", path: "/mcps" },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];

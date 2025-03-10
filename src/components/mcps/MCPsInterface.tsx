@@ -209,7 +209,11 @@ const MCPsInterface = () => {
               <p className="text-muted-foreground mb-4">
                 {searchQuery ? "Try a different search term" : "Add your first MCP server to get started"}
               </p>
-              <Button onClick={() => document.querySelector('[data-value="add"]')?.click()}>
+              <Button onClick={() => {
+                // Fix the TypeScript error by casting to HTMLElement
+                const addTab = document.querySelector('[data-value="add"]') as HTMLElement;
+                addTab?.click();
+              }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add MCP Server
               </Button>

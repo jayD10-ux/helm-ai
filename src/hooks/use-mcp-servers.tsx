@@ -151,7 +151,7 @@ export const useMCPServers = () => {
         url: url,
         name: suggestedName,
         connectionType,
-        status: "pending" // Start with pending status
+        status: "pending" // Explicitly set as one of the allowed values
       };
       
       const updatedServers = [...mcpServers, newServer];
@@ -166,9 +166,11 @@ export const useMCPServers = () => {
         // Automatically test the connection
         testMCPServer(newServer).then(result => {
           // Update the status based on the test result
+          const newStatus = result.success ? "connected" as const : "disconnected" as const;
+          
           const serverWithUpdatedStatus = {
             ...newServer,
-            status: result.success ? "connected" : "disconnected"
+            status: newStatus
           };
           
           const serversWithUpdatedStatus = updatedServers.map(s => 
@@ -263,10 +265,12 @@ export const useMCPServers = () => {
           [server.id]: result
         }));
         
-        // Update the server status based on the test result
+        // Update the server status based on the test result - using type assertion
+        const newStatus = result.success ? "connected" as const : "disconnected" as const;
+        
         const updatedServers = mcpServers.map(s => 
           s.id === server.id 
-            ? { ...s, status: result.success ? "connected" : "disconnected" } 
+            ? { ...s, status: newStatus } 
             : s
         );
         
@@ -318,10 +322,12 @@ export const useMCPServers = () => {
           [server.id]: result
         }));
         
-        // Update the server status based on the test result
+        // Update the server status based on the test result - using type assertion
+        const newStatus = result.success ? "connected" as const : "disconnected" as const;
+        
         const updatedServers = mcpServers.map(s => 
           s.id === server.id 
-            ? { ...s, status: result.success ? "connected" : "disconnected" } 
+            ? { ...s, status: newStatus } 
             : s
         );
         

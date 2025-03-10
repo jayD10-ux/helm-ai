@@ -13,36 +13,57 @@ const composioClient = {
       // Check what's available in the module
       console.log('Available in composioCore:', Object.keys(composioCore));
       
-      // Try using directly exported connect methods
-      if (typeof composioCore.connect === 'function') {
-        console.log('Using composioCore.connect method');
-        return await composioCore.connect(url);
-      }
+      // Use type assertion to safely check for methods
+      const coreMethods = composioCore as Record<string, any>;
       
-      if (typeof composioCore.connectMCP === 'function') {
-        console.log('Using composioCore.connectMCP method');
-        return await composioCore.connectMCP(url);
-      }
-      
-      // Try to find a client constructor or creation function
-      if (typeof composioCore.createClient === 'function') {
-        const client = composioCore.createClient();
-        console.log('Created client using createClient method');
-        
-        if (client && typeof client.connect === 'function') {
-          console.log('Using client.connect method');
-          return await client.connect(url);
+      // Try finding and using any available connection methods
+      for (const methodName of ['connect', 'connectMCP']) {
+        if (typeof coreMethods[methodName] === 'function') {
+          console.log(`Using composioCore.${methodName} method`);
+          try {
+            return await coreMethods[methodName](url);
+          } catch (err) {
+            console.log(`Method ${methodName} failed:`, err);
+            // Continue to the next attempt
+          }
         }
       }
       
-      // Try to instantiate a Client class if it exists
-      if (composioCore.Client && typeof composioCore.Client === 'function') {
-        const client = new composioCore.Client();
-        console.log('Created client using Client constructor');
-        
-        if (client && typeof client.connect === 'function') {
-          console.log('Using client.connect method');
-          return await client.connect(url);
+      // Try to find a client factory function
+      for (const factoryName of ['createClient', 'getClient', 'factory']) {
+        if (typeof coreMethods[factoryName] === 'function') {
+          try {
+            const client = coreMethods[factoryName]();
+            console.log(`Created client using ${factoryName} method`);
+            
+            // Try to use the client's connect method if it exists
+            if (client && typeof client.connect === 'function') {
+              console.log('Using client.connect method');
+              return await client.connect(url);
+            }
+          } catch (err) {
+            console.log(`Factory method ${factoryName} failed:`, err);
+            // Continue to the next attempt
+          }
+        }
+      }
+      
+      // Try to instantiate a client class if it exists
+      for (const className of ['Client', 'MCPClient', 'Connection']) {
+        if (typeof coreMethods[className] === 'function') {
+          try {
+            const ClientClass = coreMethods[className];
+            const client = new ClientClass();
+            console.log(`Created client using ${className} constructor`);
+            
+            if (client && typeof client.connect === 'function') {
+              console.log('Using client.connect method');
+              return await client.connect(url);
+            }
+          } catch (err) {
+            console.log(`Constructor ${className} failed:`, err);
+            // Continue to the next attempt
+          }
         }
       }
       

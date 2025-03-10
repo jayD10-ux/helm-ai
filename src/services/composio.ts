@@ -1,8 +1,8 @@
 
-import { Composio } from 'composio';
+import composio from 'composio';
 
 // Initialize Composio client with the API key
-const composioClient = new Composio({
+const composioClient = composio({
   apiKey: 'a27jq6q5drcpfzeacg56r'
 });
 

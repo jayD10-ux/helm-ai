@@ -6,12 +6,13 @@ import { fadeIn } from "@/components/ui/motion";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 
-// Import our new components
+// Import our components
 import SettingsHeader from "./SettingsHeader";
 import GeneralSettings from "./tabs/GeneralSettings";
 import ApiSettings from "./tabs/ApiSettings";
 import AppearanceSettings from "./tabs/AppearanceSettings";
 import DatabaseSettings from "./tabs/DatabaseSettings";
+import MCPServersSettings, { MCPServer } from "./tabs/MCPServersSettings";
 
 const SettingsInterface = () => {
   const { toast } = useToast();
@@ -20,6 +21,7 @@ const SettingsInterface = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [allowCodeExecution, setAllowCodeExecution] = useState(true);
   const [customInstructions, setCustomInstructions] = useState("");
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [loading, setLoading] = useState(false);
   
   useEffect(() => {
@@ -41,6 +43,7 @@ const SettingsInterface = () => {
           setDebugMode(data.debug_mode || false);
           setAllowCodeExecution(data.allow_code_execution !== false);
           setCustomInstructions(data.custom_instructions || "");
+          setMcpServers(data.mcp_servers || []);
         }
       } catch (error) {
         console.error('Error loading settings:', error);
@@ -65,6 +68,7 @@ const SettingsInterface = () => {
         debug_mode: debugMode,
         allow_code_execution: allowCodeExecution,
         custom_instructions: customInstructions,
+        mcp_servers: mcpServers,
       };
       
       const { error } = await supabase
@@ -104,6 +108,9 @@ const SettingsInterface = () => {
           <TabsTrigger value="api" className="flex-1 max-w-[200px] data-[state=active]:bg-secondary">
             API Configuration
           </TabsTrigger>
+          <TabsTrigger value="mcpservers" className="flex-1 max-w-[200px] data-[state=active]:bg-secondary">
+            MCP Servers
+          </TabsTrigger>
           <TabsTrigger value="appearance" className="flex-1 max-w-[200px] data-[state=active]:bg-secondary">
             Appearance
           </TabsTrigger>
@@ -129,6 +136,13 @@ const SettingsInterface = () => {
             setApiKey={setApiKey}
             modelType={modelType}
             setModelType={setModelType}
+          />
+        </TabsContent>
+        
+        <TabsContent value="mcpservers" className="mt-0">
+          <MCPServersSettings 
+            mcpServers={mcpServers}
+            setMcpServers={setMcpServers}
           />
         </TabsContent>
         

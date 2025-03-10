@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { testMCPConnection } from "@/services/composio";
 
 export interface MCPServer {
   id: string;
@@ -19,7 +20,7 @@ export const useMCPServers = () => {
   const [loading, setLoading] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
   
-  // Store active connections to clean them up when needed
+  // Store active connections to clean up when needed
   const activeConnections = useRef<Record<string, EventSource | WebSocket>>({});
 
   useEffect(() => {
@@ -205,7 +206,7 @@ export const useMCPServers = () => {
           description: `${suggestedName} has been added successfully.`,
         });
         
-        // Automatically test the connection
+        // Automatically test the connection using Composio
         testMCPServer(newServer).then(result => {
           // Update the status based on the test result
           const newStatus = result.success ? "connected" as const : "disconnected" as const;
@@ -285,178 +286,30 @@ export const useMCPServers = () => {
         [server.id]: { success: false, message: "Testing connection..." }
       }));
 
-      console.log(`Testing ${server.connectionType} connection to: ${server.url}`);
+      console.log(`Testing connection to MCP server: ${server.url} using Composio`);
 
-      // For SSE connections
-      if (server.connectionType === "sse") {
-        let timeoutId: number;
-        
-        // Create URL object to handle query parameters properly
-        const urlObj = new URL(server.url);
-        
-        // Add a cache-busting parameter to prevent cached responses
-        urlObj.searchParams.append('_', Date.now().toString());
-        
-        const testPromise = new Promise<{ success: boolean; message: string }>((resolve) => {
-          try {
-            // Configure EventSource with withCredentials: true to send cookies if needed
-            const eventSource = new EventSource(urlObj.toString(), { withCredentials: false });
-            
-            // Store the connection
-            activeConnections.current[server.id] = eventSource;
-            
-            // Set a timeout to close the connection if it takes too long
-            timeoutId = window.setTimeout(() => {
-              console.log("SSE connection timed out");
-              eventSource.close();
-              delete activeConnections.current[server.id];
-              resolve({ success: false, message: "Connection timed out after 5 seconds" });
-            }, 5000);
-            
-            eventSource.onopen = () => {
-              console.log("SSE connection opened successfully");
-              clearTimeout(timeoutId);
-              
-              // Keep the connection open for future use
-              resolve({ success: true, message: "Successfully connected to SSE endpoint" });
-            };
-            
-            eventSource.onmessage = (event) => {
-              console.log("SSE message received:", event.data);
-              // We don't close the connection here to keep receiving messages
-            };
-            
-            eventSource.onerror = (event) => {
-              console.error('SSE connection error:', event);
-              clearTimeout(timeoutId);
-              eventSource.close();
-              delete activeConnections.current[server.id];
-              
-              // Check if the server might require authentication
-              if (event instanceof Event && 'status' in event.target && (event.target as any).status === 401) {
-                resolve({ success: false, message: "Authentication required for SSE endpoint" });
-              } else {
-                resolve({ success: false, message: "Failed to connect to SSE endpoint" });
-              }
-            };
-          } catch (error) {
-            console.error('Error in SSE connection test:', error);
-            clearTimeout(timeoutId);
-            delete activeConnections.current[server.id];
-            resolve({ 
-              success: false, 
-              message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
-            });
-          }
-        });
-        
-        const result = await testPromise;
-        console.log(`Test result for ${server.url}:`, result);
-        
-        setTestResults(prev => ({
-          ...prev,
-          [server.id]: result
-        }));
-        
-        // Update the server status based on the test result
-        const newStatus = result.success ? "connected" as const : "disconnected" as const;
-        
-        const updatedServers = mcpServers.map(s => 
-          s.id === server.id 
-            ? { ...s, status: newStatus } 
-            : s
-        );
-        
-        saveMCPServers(updatedServers);
-        
-        return result;
-      } 
-      // For WebSocket connections
-      else if (server.connectionType === "websocket") {
-        let timeoutId: number;
-        
-        const testPromise = new Promise<{ success: boolean; message: string }>((resolve) => {
-          try {
-            // Convert HTTP/HTTPS to WS/WSS
-            const wsUrl = server.url.replace(/^http/, 'ws');
-            console.log(`Connecting to WebSocket URL: ${wsUrl}`);
-            
-            // Add a cache-busting parameter
-            const urlWithCacheBuster = new URL(wsUrl);
-            urlWithCacheBuster.searchParams.append('_', Date.now().toString());
-            
-            const socket = new WebSocket(urlWithCacheBuster.toString());
-            
-            // Store the connection
-            activeConnections.current[server.id] = socket;
-            
-            // Set a timeout to close the connection if it takes too long
-            timeoutId = window.setTimeout(() => {
-              console.log("WebSocket connection timed out");
-              socket.close();
-              delete activeConnections.current[server.id];
-              resolve({ success: false, message: "Connection timed out after 5 seconds" });
-            }, 5000);
-            
-            socket.onopen = () => {
-              console.log("WebSocket connection opened successfully");
-              clearTimeout(timeoutId);
-              // Keep the connection open for future use
-              resolve({ success: true, message: "Successfully connected to WebSocket endpoint" });
-            };
-            
-            socket.onmessage = (event) => {
-              console.log("WebSocket message received:", event.data);
-              // We don't close the connection here to keep receiving messages
-            };
-            
-            socket.onerror = (event) => {
-              console.error('WebSocket connection error:', event);
-              clearTimeout(timeoutId);
-              socket.close();
-              delete activeConnections.current[server.id];
-              resolve({ success: false, message: "Failed to connect to WebSocket endpoint" });
-            };
-            
-            socket.onclose = (event) => {
-              console.log("WebSocket connection closed:", event);
-              clearTimeout(timeoutId);
-              delete activeConnections.current[server.id];
-            };
-          } catch (error) {
-            console.error('Error in WebSocket connection test:', error);
-            clearTimeout(timeoutId);
-            delete activeConnections.current[server.id];
-            resolve({ 
-              success: false, 
-              message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
-            });
-          }
-        });
-        
-        const result = await testPromise;
-        console.log(`Test result for ${server.url}:`, result);
-        
-        setTestResults(prev => ({
-          ...prev,
-          [server.id]: result
-        }));
-        
-        // Update the server status based on the test result
-        const newStatus = result.success ? "connected" as const : "disconnected" as const;
-        
-        const updatedServers = mcpServers.map(s => 
-          s.id === server.id 
-            ? { ...s, status: newStatus } 
-            : s
-        );
-        
-        saveMCPServers(updatedServers);
-        
-        return result;
-      }
+      // Use the Composio service to test the connection
+      const result = await testMCPConnection(server.url);
       
-      return { success: false, message: "Unknown connection type" };
+      console.log(`Test result for ${server.url}:`, result);
+      
+      setTestResults(prev => ({
+        ...prev,
+        [server.id]: result
+      }));
+      
+      // Update the server status based on the test result
+      const newStatus = result.success ? "connected" as const : "disconnected" as const;
+      
+      const updatedServers = mcpServers.map(s => 
+        s.id === server.id 
+          ? { ...s, status: newStatus } 
+          : s
+      );
+      
+      saveMCPServers(updatedServers);
+      
+      return result;
     } catch (error) {
       console.error('Error testing MCP server:', error);
       const errorResult = { 

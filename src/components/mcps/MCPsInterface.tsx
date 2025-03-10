@@ -275,10 +275,15 @@ const MCPsInterface = () => {
                   </div>
                 </div>
                 
-                <p className="text-sm text-muted-foreground mt-4">
-                  Add Model Context Protocol (MCP) servers to enhance Helm AI with external tools and data sources.
-                  You can obtain MCP URLs from services that support the protocol.
-                </p>
+                <div className="text-sm text-muted-foreground mt-4 space-y-2">
+                  <p>
+                    Add Model Context Protocol (MCP) servers to enhance Helm AI with external tools and data sources.
+                    You can obtain MCP URLs from services that support the protocol.
+                  </p>
+                  <p className="font-medium text-primary">
+                    Powered by Composio for enhanced MCP compatibility.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>

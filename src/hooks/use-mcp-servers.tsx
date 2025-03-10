@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
-import { testMCPConnection } from "@/services/composio";
+import { testMCPConnection, checkOAuthRequired, initiateOAuth } from "@/services/composio";
 
 export interface MCPServer {
   id: string;
@@ -9,6 +9,8 @@ export interface MCPServer {
   name: string;
   connectionType: "sse" | "websocket";
   status: "connected" | "disconnected" | "pending";
+  requiresAuth?: boolean;
+  isAuthenticated?: boolean;
 }
 
 // For development without authentication
@@ -26,6 +28,23 @@ export const useMCPServers = () => {
   useEffect(() => {
     loadMCPServers();
     
+    // Set up OAuth callback listener
+    const handleOAuthCallback = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const state = urlParams.get('state');
+      const serverId = urlParams.get('server_id');
+      
+      if (code && state) {
+        processOAuthCallback(code, state, serverId || undefined);
+      }
+    };
+    
+    // Check if current URL is an OAuth callback
+    if (window.location.pathname.includes('oauth-callback')) {
+      handleOAuthCallback();
+    }
+    
     // Clean up any active connections when component unmounts
     return () => {
       Object.values(activeConnections.current).forEach(connection => {
@@ -37,6 +56,50 @@ export const useMCPServers = () => {
       });
     };
   }, []);
+
+  const processOAuthCallback = async (code: string, state: string, serverId?: string) => {
+    try {
+      setLoading(true);
+      
+      // Import this function dynamically to avoid circular dependencies
+      const { handleOAuthCallback } = await import('@/services/composio');
+      const success = await handleOAuthCallback(code, state, serverId);
+      
+      if (success && serverId) {
+        // Update the server's authentication status
+        const updatedServers = mcpServers.map(server => 
+          server.id === serverId 
+            ? { ...server, isAuthenticated: true } 
+            : server
+        );
+        
+        await saveMCPServers(updatedServers);
+        
+        toast({
+          title: "Authentication Successful",
+          description: "Successfully authenticated with the MCP server.",
+        });
+        
+        // Close the OAuth popup if it exists
+        window.close();
+      } else {
+        toast({
+          title: "Authentication Failed",
+          description: "Failed to complete authentication with the MCP server.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Error processing OAuth callback:', error);
+      toast({
+        title: "Authentication Error",
+        description: "An error occurred during authentication.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadMCPServers = async () => {
     try {
@@ -194,7 +257,9 @@ export const useMCPServers = () => {
         url: url,
         name: suggestedName,
         connectionType,
-        status: "pending" // Explicitly set as one of the allowed values
+        status: "pending", // Explicitly set as one of the allowed values
+        requiresAuth: undefined,
+        isAuthenticated: undefined
       };
       
       const updatedServers = [...mcpServers, newServer];
@@ -288,6 +353,31 @@ export const useMCPServers = () => {
 
       console.log(`Testing connection to MCP server: ${server.url} using Composio`);
 
+      // First, check if this server requires OAuth authentication
+      const requiresAuth = await checkOAuthRequired(server);
+      
+      console.log(`Server ${server.url} requires authentication: ${requiresAuth}`);
+      
+      // Update the server to indicate if it requires authentication
+      const updatedServer = { 
+        ...server, 
+        requiresAuth 
+      };
+      
+      // Save this information
+      const updatedServers = mcpServers.map(s => 
+        s.id === server.id ? updatedServer : s
+      );
+      await saveMCPServers(updatedServers);
+      
+      if (requiresAuth && !server.isAuthenticated) {
+        // If authentication is required but not yet authenticated
+        return {
+          success: false,
+          message: "Authentication required. Please authenticate to connect."
+        };
+      }
+      
       // Use the Composio service to test the connection
       const result = await testMCPConnection(server.url);
       
@@ -301,13 +391,13 @@ export const useMCPServers = () => {
       // Update the server status based on the test result
       const newStatus = result.success ? "connected" as const : "disconnected" as const;
       
-      const updatedServers = mcpServers.map(s => 
+      const serversWithUpdatedStatus = updatedServers.map(s => 
         s.id === server.id 
           ? { ...s, status: newStatus } 
           : s
       );
       
-      saveMCPServers(updatedServers);
+      saveMCPServers(serversWithUpdatedStatus);
       
       return result;
     } catch (error) {
@@ -325,6 +415,55 @@ export const useMCPServers = () => {
       return errorResult;
     }
   };
+  
+  const authenticateMCPServer = async (server: MCPServer) => {
+    try {
+      setLoading(true);
+      
+      // First, ensure we know if this server requires authentication
+      if (server.requiresAuth === undefined) {
+        const requiresAuth = await checkOAuthRequired(server);
+        server = { ...server, requiresAuth };
+        
+        // Update the server in our state
+        const updatedServers = mcpServers.map(s => 
+          s.id === server.id ? server : s
+        );
+        await saveMCPServers(updatedServers);
+      }
+      
+      if (!server.requiresAuth) {
+        toast({
+          title: "Authentication Not Required",
+          description: "This MCP server doesn't require authentication.",
+        });
+        return false;
+      }
+      
+      // Initiate the OAuth flow
+      const success = await initiateOAuth(server);
+      
+      if (!success) {
+        toast({
+          title: "Authentication Failed",
+          description: "Failed to initiate authentication with the MCP server.",
+          variant: "destructive"
+        });
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('Error authenticating with MCP server:', error);
+      toast({
+        title: "Authentication Error",
+        description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return {
     mcpServers,
@@ -334,6 +473,7 @@ export const useMCPServers = () => {
     addMCPServer,
     removeMCPServer,
     testMCPServer,
+    authenticateMCPServer,
     activeConnections: activeConnections.current
   };
 };

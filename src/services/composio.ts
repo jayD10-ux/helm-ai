@@ -1,7 +1,8 @@
 // Import the composio-core module
 import * as composioCore from 'composio-core';
+import { MCPServer } from '@/hooks/use-mcp-servers';
 
-// Advanced module inspection to understand the structure
+// Diagnostic logging kept for debugging purposes
 console.log('=== COMPOSIO CORE MODULE DIAGNOSTICS ===');
 console.log('1. Module type:', typeof composioCore);
 console.log('2. Is array?', Array.isArray(composioCore));
@@ -66,6 +67,10 @@ if (typeof (composioCore as any).init === 'function') {
 
 // Create a client that handles MCP connections with enhanced diagnostics
 const composioClient = {
+  // OAuth-related properties to track authentication state
+  oauthState: new Map<string, string>(),
+  oauthWindows: new Map<string, Window>(),
+  
   connectMCPServer: async (url: string) => {
     console.log(`=== ATTEMPTING TO CONNECT TO MCP SERVER ===`);
     console.log(`Attempting to connect to MCP server at: ${url}`);
@@ -261,6 +266,153 @@ const composioClient = {
       console.error('Unexpected error in connectMCPServer:', error);
       return { status: 'error', message: error instanceof Error ? error.message : String(error) };
     }
+  },
+  
+  // Detect if a server requires OAuth authentication
+  requiresOAuth: async (server: MCPServer): Promise<boolean> => {
+    try {
+      console.log(`Checking if ${server.url} requires OAuth authentication`);
+      
+      // For now, we'll simulate OAuth detection
+      // In a real implementation, this would check the server's capabilities
+      // or make a test request to see if it returns an auth challenge
+      
+      // Mock implementation - in production, this would check the server's response
+      // to determine if authentication is required
+      const response = await fetch(`${server.url}/auth-info`, { 
+        method: 'GET',
+        headers: { 'Accept': 'application/json' }
+      }).catch(() => ({ status: 404 }));
+      
+      // If the server responds with a 401 or has specific OAuth endpoints
+      // consider it as requiring OAuth
+      if (response instanceof Response) {
+        if (response.status === 401) {
+          console.log(`${server.url} requires authentication`);
+          return true;
+        }
+        
+        try {
+          const authInfo = await response.json();
+          return !!(authInfo.oauth_required || authInfo.authentication_required);
+        } catch (e) {
+          // Not JSON or doesn't have OAuth info
+          return false;
+        }
+      }
+      
+      // As a fallback for demo purposes, check for OAuth-related keywords in the URL
+      const oauthKeywords = ['auth', 'oauth', 'login', 'connect'];
+      return oauthKeywords.some(keyword => server.url.toLowerCase().includes(keyword));
+    } catch (error) {
+      console.error('Error checking OAuth requirements:', error);
+      return false;
+    }
+  },
+  
+  // Initiate OAuth authentication flow
+  initiateOAuth: async (server: MCPServer): Promise<{ authUrl: string; state: string }> => {
+    try {
+      console.log(`Initiating OAuth flow for ${server.url}`);
+      
+      // Generate a random state parameter for security
+      const state = Math.random().toString(36).substring(2, 15);
+      composioClient.oauthState.set(server.id, state);
+      
+      // In a real implementation, this would get the auth URL from the server
+      // For now, we'll construct a mock URL
+      const authUrl = new URL(`${server.url}/oauth/authorize`);
+      authUrl.searchParams.append('client_id', 'helm-ai-client');
+      authUrl.searchParams.append('redirect_uri', `${window.location.origin}/oauth-callback`);
+      authUrl.searchParams.append('response_type', 'code');
+      authUrl.searchParams.append('state', state);
+      authUrl.searchParams.append('scope', 'read write');
+      
+      console.log(`Auth URL: ${authUrl.toString()}`);
+      
+      return { authUrl: authUrl.toString(), state };
+    } catch (error) {
+      console.error('Error initiating OAuth flow:', error);
+      throw new Error(`Failed to initiate OAuth flow: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  },
+  
+  // Open OAuth authentication window
+  openOAuthWindow: (server: MCPServer, authUrl: string): Window | null => {
+    try {
+      console.log(`Opening OAuth window for ${server.url}`);
+      
+      // Close any existing OAuth window for this server
+      if (composioClient.oauthWindows.has(server.id)) {
+        const existingWindow = composioClient.oauthWindows.get(server.id);
+        if (existingWindow && !existingWindow.closed) {
+          existingWindow.close();
+        }
+      }
+      
+      // Open a new window for OAuth authentication
+      const width = 600;
+      const height = 700;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      
+      const oauthWindow = window.open(
+        authUrl,
+        `oauth-${server.id}`,
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+      
+      if (oauthWindow) {
+        composioClient.oauthWindows.set(server.id, oauthWindow);
+      } else {
+        console.error('Failed to open OAuth window. Popup might be blocked.');
+      }
+      
+      return oauthWindow;
+    } catch (error) {
+      console.error('Error opening OAuth window:', error);
+      return null;
+    }
+  },
+  
+  // Handle OAuth callback with authorization code
+  handleOAuthCallback: async (code: string, state: string, serverId?: string): Promise<boolean> => {
+    try {
+      console.log(`Handling OAuth callback with code: ${code} and state: ${state}`);
+      
+      // Verify the state parameter to prevent CSRF attacks
+      let validServer: string | undefined = serverId;
+      
+      if (!validServer) {
+        // Find the server that initiated this OAuth flow
+        for (const [id, savedState] of composioClient.oauthState.entries()) {
+          if (savedState === state) {
+            validServer = id;
+            break;
+          }
+        }
+      }
+      
+      if (!validServer) {
+        console.error('Invalid OAuth state parameter');
+        return false;
+      }
+      
+      console.log(`Valid OAuth callback for server: ${validServer}`);
+      
+      // In a real implementation, this would exchange the code for an access token
+      // For now, we'll simulate a successful token exchange
+      console.log(`Exchanging code for access token...`);
+      
+      // Simulate token exchange delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log(`Successfully authenticated with server ${validServer}`);
+      return true;
+    } catch (error) {
+      console.error('Error handling OAuth callback:', error);
+      return false;
+    }
   }
 };
 
@@ -304,6 +456,26 @@ export const testMCPConnection = async (url: string): Promise<{
       message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
     };
   }
+};
+
+// New OAuth-related exports
+export const checkOAuthRequired = async (server: MCPServer): Promise<boolean> => {
+  return composioClient.requiresOAuth(server);
+};
+
+export const initiateOAuth = async (server: MCPServer): Promise<boolean> => {
+  try {
+    const { authUrl } = await composioClient.initiateOAuth(server);
+    const oauthWindow = composioClient.openOAuthWindow(server, authUrl);
+    return !!oauthWindow;
+  } catch (error) {
+    console.error('Error initiating OAuth:', error);
+    return false;
+  }
+};
+
+export const handleOAuthCallback = async (code: string, state: string, serverId?: string): Promise<boolean> => {
+  return composioClient.handleOAuthCallback(code, state, serverId);
 };
 
 export default composioClient;

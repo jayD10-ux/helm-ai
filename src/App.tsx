@@ -9,6 +9,7 @@ import Widgets from "./pages/Widgets";
 import MCPs from "./pages/MCPs";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import OAuthCallback from "./pages/OAuthCallback";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,7 @@ const App = () => (
           <Route path="/widgets" element={<Widgets />} />
           <Route path="/mcps" element={<MCPs />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -1,7 +1,6 @@
-
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Server, Trash2, Settings, Plus, ExternalLink, Play, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Server, Trash2, Play, CheckCircle, XCircle, Loader2, LockIcon, UnlockIcon, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,19 +16,28 @@ const MCPCard = ({
   mcp, 
   onRemove, 
   onTest, 
+  onAuthenticate,
   testResult 
 }: { 
   mcp: MCPServer;
   onRemove: (id: string) => void;
   onTest: (server: MCPServer) => void;
+  onAuthenticate: (server: MCPServer) => void;
   testResult?: { success: boolean; message: string };
 }) => {
   const [testing, setTesting] = useState(false);
+  const [authenticating, setAuthenticating] = useState(false);
   
   const handleTest = async () => {
     setTesting(true);
     await onTest(mcp);
     setTesting(false);
+  };
+  
+  const handleAuthenticate = async () => {
+    setAuthenticating(true);
+    await onAuthenticate(mcp);
+    setAuthenticating(false);
   };
   
   return (
@@ -38,9 +46,21 @@ const MCPCard = ({
         <CardHeader className="pb-2">
           <div className="flex justify-between items-start">
             <CardTitle className="text-lg font-medium">{mcp.name}</CardTitle>
-            <Badge variant={mcp.status === "connected" ? "default" : "destructive"} className="ml-2">
-              {mcp.status}
-            </Badge>
+            <div className="flex gap-1">
+              {mcp.requiresAuth && (
+                <Badge variant="outline" className="ml-2 bg-amber-500/10 text-amber-600 border-amber-200">
+                  {mcp.isAuthenticated ? (
+                    <UnlockIcon className="h-3 w-3 mr-1" />
+                  ) : (
+                    <LockIcon className="h-3 w-3 mr-1" />
+                  )}
+                  {mcp.isAuthenticated ? "Authenticated" : "Auth Required"}
+                </Badge>
+              )}
+              <Badge variant={mcp.status === "connected" ? "default" : "destructive"} className="ml-2">
+                {mcp.status}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -48,7 +68,6 @@ const MCPCard = ({
             <span className="font-medium">URL:</span>{" "}
             <a href={mcp.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center">
               {mcp.url.length > 40 ? `${mcp.url.slice(0, 40)}...` : mcp.url}
-              <ExternalLink className="h-3 w-3 ml-1" />
             </a>
           </p>
           <p className="text-sm text-muted-foreground">
@@ -73,25 +92,50 @@ const MCPCard = ({
           )}
         </CardContent>
         <CardFooter className="flex justify-between pt-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="text-xs"
-            onClick={handleTest}
-            disabled={testing}
-          >
-            {testing ? (
-              <>
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                Testing...
-              </>
-            ) : (
-              <>
-                <Play className="h-3 w-3 mr-1" />
-                Test Connection
-              </>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="text-xs"
+              onClick={handleTest}
+              disabled={testing}
+            >
+              {testing ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <Play className="h-3 w-3 mr-1" />
+                  Test
+                </>
+              )}
+            </Button>
+            
+            {(mcp.requiresAuth && !mcp.isAuthenticated) && (
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="text-xs"
+                onClick={handleAuthenticate}
+                disabled={authenticating}
+              >
+                {authenticating ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Authenticating...
+                  </>
+                ) : (
+                  <>
+                    <Key className="h-3 w-3 mr-1" />
+                    Authenticate
+                  </>
+                )}
+              </Button>
             )}
-          </Button>
+          </div>
+          
           <Button 
             variant="destructive" 
             size="sm" 
@@ -115,7 +159,8 @@ const MCPsInterface = () => {
     testResults,
     addMCPServer,
     removeMCPServer,
-    testMCPServer
+    testMCPServer,
+    authenticateMCPServer
   } = useMCPServers();
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -151,6 +196,10 @@ const MCPsInterface = () => {
   
   const handleTestServer = async (server: MCPServer) => {
     await testMCPServer(server);
+  };
+  
+  const handleAuthenticateServer = async (server: MCPServer) => {
+    await authenticateMCPServer(server);
   };
   
   return (
@@ -197,6 +246,7 @@ const MCPsInterface = () => {
                 mcp={mcp} 
                 onRemove={removeMCPServer} 
                 onTest={handleTestServer}
+                onAuthenticate={handleAuthenticateServer}
                 testResult={testResults[mcp.id]}
               />
             ))}
@@ -210,11 +260,10 @@ const MCPsInterface = () => {
                 {searchQuery ? "Try a different search term" : "Add your first MCP server to get started"}
               </p>
               <Button onClick={() => {
-                // Fix the TypeScript error by casting to HTMLElement
                 const addTab = document.querySelector('[data-value="add"]') as HTMLElement;
                 addTab?.click();
               }}>
-                <Plus className="h-4 w-4 mr-2" />
+                <Server className="h-4 w-4 mr-2" />
                 Add MCP Server
               </Button>
             </div>

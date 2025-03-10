@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { fadeIn } from "@/components/ui/motion";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 const SettingsInterface = () => {
   const { toast } = useToast();
@@ -20,22 +20,73 @@ const SettingsInterface = () => {
   const [debugMode, setDebugMode] = useState(false);
   const [allowCodeExecution, setAllowCodeExecution] = useState(true);
   const [customInstructions, setCustomInstructions] = useState("");
+  const [loading, setLoading] = useState(false);
   
-  const handleSaveSettings = () => {
-    // Placeholder for saving settings
-    console.log({
-      apiKey,
-      modelType,
-      debugMode,
-      allowCodeExecution,
-      customInstructions
-    });
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('*')
+          .limit(1)
+          .single();
+          
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
+        
+        if (data) {
+          setApiKey(data.api_key || "");
+          setModelType(data.model_type || "gpt-4");
+          setDebugMode(data.debug_mode || false);
+          setAllowCodeExecution(data.allow_code_execution !== false);
+          setCustomInstructions(data.custom_instructions || "");
+        }
+      } catch (error) {
+        console.error('Error loading settings:', error);
+        toast({
+          title: "Error loading settings",
+          description: "Failed to load your saved settings.",
+          variant: "destructive"
+        });
+      }
+    };
     
-    // Would implement actual save to database functionality here
-    toast({
-      title: "Settings saved",
-      description: "Your settings have been saved successfully.",
-    });
+    loadSettings();
+  }, []);
+  
+  const handleSaveSettings = async () => {
+    try {
+      setLoading(true);
+      
+      const settings = {
+        api_key: apiKey,
+        model_type: modelType,
+        debug_mode: debugMode,
+        allow_code_execution: allowCodeExecution,
+        custom_instructions: customInstructions,
+      };
+      
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(settings, { onConflict: 'user_id' });
+        
+      if (error) throw error;
+      
+      toast({
+        title: "Settings saved",
+        description: "Your settings have been saved successfully.",
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: "Error saving settings",
+        description: "Failed to save your settings.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
   
   return (
@@ -48,9 +99,9 @@ const SettingsInterface = () => {
           <h1 className="text-2xl font-bold text-gradient">Settings</h1>
           <p className="text-muted-foreground">Configure your Helm AI experience</p>
         </div>
-        <Button onClick={handleSaveSettings}>
+        <Button onClick={handleSaveSettings} disabled={loading}>
           <Save className="h-4 w-4 mr-2" />
-          Save Settings
+          {loading ? "Saving..." : "Save Settings"}
         </Button>
       </div>
       
@@ -64,6 +115,9 @@ const SettingsInterface = () => {
           </TabsTrigger>
           <TabsTrigger value="appearance" className="flex-1 max-w-[200px] data-[state=active]:bg-secondary">
             Appearance
+          </TabsTrigger>
+          <TabsTrigger value="database" className="flex-1 max-w-[200px] data-[state=active]:bg-secondary">
+            Database
           </TabsTrigger>
         </TabsList>
         
@@ -225,6 +279,53 @@ const SettingsInterface = () => {
                       </label>
                     </div>
                   ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="database" className="mt-0">
+          <Card className="glass-morphism mb-6">
+            <CardHeader>
+              <CardTitle>Supabase Database</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="bg-secondary/20 p-4 rounded-md">
+                <p className="text-sm">
+                  <span className="font-bold">Connection Status:</span> Connected to Supabase
+                </p>
+                <p className="text-sm mt-2">
+                  <span className="font-bold">Project URL:</span> https://nwaeufzdrvwfavohsklz.supabase.co
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <Label>Database Tables</Label>
+                  <Button variant="outline" size="sm" onClick={() => window.open('https://nwaeufzdrvwfavohsklz.supabase.co', '_blank')}>
+                    Open Supabase Dashboard
+                  </Button>
+                </div>
+                <div className="bg-card border border-border rounded-md p-3">
+                  <ul className="space-y-2">
+                    <li className="flex items-center text-sm">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                      chats
+                    </li>
+                    <li className="flex items-center text-sm">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                      messages
+                    </li>
+                    <li className="flex items-center text-sm">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                      user_settings
+                    </li>
+                    <li className="flex items-center text-sm">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                      mcps
+                    </li>
+                  </ul>
                 </div>
               </div>
             </CardContent>

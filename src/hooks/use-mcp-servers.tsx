@@ -35,8 +35,11 @@ export const useMCPServers = () => {
         .eq('user_id', TEMP_USER_ID)
         .maybeSingle();
         
+      console.log("Checking for existing settings:", { existingSettings, checkError });
+        
       // If no settings found for test user, create an empty record
       if (!existingSettings && !checkError) {
+        console.log("No settings found, creating new record");
         await supabase
           .from('user_settings')
           .insert({ user_id: TEMP_USER_ID, mcp_servers: [] });
@@ -76,19 +79,45 @@ export const useMCPServers = () => {
     try {
       setLoading(true);
       
-      const { error } = await supabase
+      // Add detailed logging to diagnose the issue
+      console.log("About to save MCP servers:", servers);
+      
+      // Check if a record already exists
+      const { data: existingRecord, error: checkError } = await supabase
         .from('user_settings')
-        .upsert({ 
-          user_id: TEMP_USER_ID,
-          mcp_servers: servers 
-        });
+        .select('id')
+        .eq('user_id', TEMP_USER_ID)
+        .maybeSingle();
+      
+      console.log("Check for existing record result:", { existingRecord, checkError });
+      
+      let result;
+      
+      // If record exists, use update instead of upsert
+      if (existingRecord) {
+        console.log("Updating existing record with id:", existingRecord.id);
+        result = await supabase
+          .from('user_settings')
+          .update({ mcp_servers: servers })
+          .eq('user_id', TEMP_USER_ID);
+      } else {
+        console.log("No existing record found, inserting new one");
+        result = await supabase
+          .from('user_settings')
+          .insert({ 
+            user_id: TEMP_USER_ID,
+            mcp_servers: servers 
+          });
+      }
+      
+      const { error } = result;
         
       if (error) {
         console.error('Error saving MCP servers:', error);
         throw error;
       }
       
-      console.log('Saved MCP servers:', servers);
+      console.log('Successfully saved MCP servers:', servers);
       setMcpServers(servers);
       
       toast({

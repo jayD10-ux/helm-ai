@@ -1,3 +1,4 @@
+
 import { OpenAI } from "openai";
 import { OpenAIToolSet } from "composio-core";
 import { MCPServer } from '@/hooks/use-mcp-servers';
@@ -172,13 +173,14 @@ export const getToolsWithAuth = async (server: MCPServer): Promise<any> => {
       throw new Error('Authentication required');
     }
     
-    // Include the authentication information in the getTools call
+    // Create a URL with authentication parameters
+    const url = new URL(server.url);
+    url.searchParams.append('code', auth.code);
+    url.searchParams.append('state', auth.state);
+    
+    // Use the URL with auth params in the getTools call
     const tools = await composioToolset.getTools({
-      apps: [server.url],
-      auth: {
-        code: auth.code,
-        state: auth.state
-      }
+      apps: [url.toString()]
     });
     
     console.log('Successfully got tools with authentication:', tools);

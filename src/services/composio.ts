@@ -1,8 +1,8 @@
 
-import composio from 'composio';
+import { ComposioClient } from 'composio-core';
 
 // Initialize Composio client with the API key
-const composioClient = composio({
+const composioClient = new ComposioClient({
   apiKey: 'a27jq6q5drcpfzeacg56r'
 });
 
@@ -11,7 +11,7 @@ export const connectToMCP = async (url: string): Promise<boolean> => {
     console.log(`Connecting to MCP server at: ${url}`);
     
     // Use Composio to connect to the MCP server
-    const connection = await composioClient.connect(url);
+    const connection = await composioClient.connectMCPServer(url);
     
     console.log('MCP connection result:', connection);
     return connection.status === 'connected';

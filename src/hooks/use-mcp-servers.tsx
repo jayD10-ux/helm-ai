@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 
@@ -19,9 +18,23 @@ export const useMCPServers = () => {
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [loading, setLoading] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
+  
+  // Store active connections to clean them up when needed
+  const activeConnections = useRef<Record<string, EventSource | WebSocket>>({});
 
   useEffect(() => {
     loadMCPServers();
+    
+    // Clean up any active connections when component unmounts
+    return () => {
+      Object.values(activeConnections.current).forEach(connection => {
+        if (connection instanceof EventSource) {
+          connection.close();
+        } else if (connection instanceof WebSocket) {
+          connection.close();
+        }
+      });
+    };
   }, []);
 
   const loadMCPServers = async () => {
@@ -228,6 +241,16 @@ export const useMCPServers = () => {
   
   const removeMCPServer = async (id: string) => {
     try {
+      // Close any active connections for this server
+      if (activeConnections.current[id]) {
+        if (activeConnections.current[id] instanceof EventSource) {
+          (activeConnections.current[id] as EventSource).close();
+        } else if (activeConnections.current[id] instanceof WebSocket) {
+          (activeConnections.current[id] as WebSocket).close();
+        }
+        delete activeConnections.current[id];
+      }
+      
       const updatedServers = mcpServers.filter(server => server.id !== id);
       await saveMCPServers(updatedServers);
       
@@ -247,6 +270,16 @@ export const useMCPServers = () => {
 
   const testMCPServer = async (server: MCPServer) => {
     try {
+      // Close any existing connection for this server
+      if (activeConnections.current[server.id]) {
+        if (activeConnections.current[server.id] instanceof EventSource) {
+          (activeConnections.current[server.id] as EventSource).close();
+        } else if (activeConnections.current[server.id] instanceof WebSocket) {
+          (activeConnections.current[server.id] as WebSocket).close();
+        }
+        delete activeConnections.current[server.id];
+      }
+      
       setTestResults(prev => ({
         ...prev,
         [server.id]: { success: false, message: "Testing connection..." }
@@ -257,32 +290,63 @@ export const useMCPServers = () => {
       // For SSE connections
       if (server.connectionType === "sse") {
         let timeoutId: number;
-        const testPromise = new Promise<{ success: boolean; message: string }>((resolve, reject) => {
+        
+        // Create URL object to handle query parameters properly
+        const urlObj = new URL(server.url);
+        
+        // Add a cache-busting parameter to prevent cached responses
+        urlObj.searchParams.append('_', Date.now().toString());
+        
+        const testPromise = new Promise<{ success: boolean; message: string }>((resolve) => {
           try {
-            const eventSource = new EventSource(server.url);
+            // Configure EventSource with withCredentials: true to send cookies if needed
+            const eventSource = new EventSource(urlObj.toString(), { withCredentials: false });
+            
+            // Store the connection
+            activeConnections.current[server.id] = eventSource;
             
             // Set a timeout to close the connection if it takes too long
             timeoutId = window.setTimeout(() => {
+              console.log("SSE connection timed out");
               eventSource.close();
+              delete activeConnections.current[server.id];
               resolve({ success: false, message: "Connection timed out after 5 seconds" });
             }, 5000);
             
             eventSource.onopen = () => {
+              console.log("SSE connection opened successfully");
               clearTimeout(timeoutId);
-              eventSource.close();
+              
+              // Keep the connection open for future use
               resolve({ success: true, message: "Successfully connected to SSE endpoint" });
             };
             
+            eventSource.onmessage = (event) => {
+              console.log("SSE message received:", event.data);
+              // We don't close the connection here to keep receiving messages
+            };
+            
             eventSource.onerror = (event) => {
+              console.error('SSE connection error:', event);
               clearTimeout(timeoutId);
               eventSource.close();
-              console.error('SSE connection error:', event);
-              resolve({ success: false, message: "Failed to connect to SSE endpoint" });
+              delete activeConnections.current[server.id];
+              
+              // Check if the server might require authentication
+              if (event instanceof Event && 'status' in event.target && (event.target as any).status === 401) {
+                resolve({ success: false, message: "Authentication required for SSE endpoint" });
+              } else {
+                resolve({ success: false, message: "Failed to connect to SSE endpoint" });
+              }
             };
           } catch (error) {
-            clearTimeout(timeoutId);
             console.error('Error in SSE connection test:', error);
-            reject(error);
+            clearTimeout(timeoutId);
+            delete activeConnections.current[server.id];
+            resolve({ 
+              success: false, 
+              message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+            });
           }
         });
         
@@ -294,7 +358,7 @@ export const useMCPServers = () => {
           [server.id]: result
         }));
         
-        // Update the server status based on the test result - using type assertion
+        // Update the server status based on the test result
         const newStatus = result.success ? "connected" as const : "disconnected" as const;
         
         const updatedServers = mcpServers.map(s => 
@@ -310,36 +374,63 @@ export const useMCPServers = () => {
       // For WebSocket connections
       else if (server.connectionType === "websocket") {
         let timeoutId: number;
-        const testPromise = new Promise<{ success: boolean; message: string }>((resolve, reject) => {
+        
+        const testPromise = new Promise<{ success: boolean; message: string }>((resolve) => {
           try {
             // Convert HTTP/HTTPS to WS/WSS
             const wsUrl = server.url.replace(/^http/, 'ws');
             console.log(`Connecting to WebSocket URL: ${wsUrl}`);
             
-            const socket = new WebSocket(wsUrl);
+            // Add a cache-busting parameter
+            const urlWithCacheBuster = new URL(wsUrl);
+            urlWithCacheBuster.searchParams.append('_', Date.now().toString());
+            
+            const socket = new WebSocket(urlWithCacheBuster.toString());
+            
+            // Store the connection
+            activeConnections.current[server.id] = socket;
             
             // Set a timeout to close the connection if it takes too long
             timeoutId = window.setTimeout(() => {
+              console.log("WebSocket connection timed out");
               socket.close();
+              delete activeConnections.current[server.id];
               resolve({ success: false, message: "Connection timed out after 5 seconds" });
             }, 5000);
             
             socket.onopen = () => {
+              console.log("WebSocket connection opened successfully");
               clearTimeout(timeoutId);
-              socket.close();
+              // Keep the connection open for future use
               resolve({ success: true, message: "Successfully connected to WebSocket endpoint" });
             };
             
+            socket.onmessage = (event) => {
+              console.log("WebSocket message received:", event.data);
+              // We don't close the connection here to keep receiving messages
+            };
+            
             socket.onerror = (event) => {
+              console.error('WebSocket connection error:', event);
               clearTimeout(timeoutId);
               socket.close();
-              console.error('WebSocket connection error:', event);
+              delete activeConnections.current[server.id];
               resolve({ success: false, message: "Failed to connect to WebSocket endpoint" });
             };
+            
+            socket.onclose = (event) => {
+              console.log("WebSocket connection closed:", event);
+              clearTimeout(timeoutId);
+              delete activeConnections.current[server.id];
+            };
           } catch (error) {
-            clearTimeout(timeoutId);
             console.error('Error in WebSocket connection test:', error);
-            reject(error);
+            clearTimeout(timeoutId);
+            delete activeConnections.current[server.id];
+            resolve({ 
+              success: false, 
+              message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+            });
           }
         });
         
@@ -351,7 +442,7 @@ export const useMCPServers = () => {
           [server.id]: result
         }));
         
-        // Update the server status based on the test result - using type assertion
+        // Update the server status based on the test result
         const newStatus = result.success ? "connected" as const : "disconnected" as const;
         
         const updatedServers = mcpServers.map(s => 
@@ -389,6 +480,7 @@ export const useMCPServers = () => {
     loadMCPServers,
     addMCPServer,
     removeMCPServer,
-    testMCPServer
+    testMCPServer,
+    activeConnections: activeConnections.current
   };
 };

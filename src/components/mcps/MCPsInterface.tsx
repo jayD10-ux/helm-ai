@@ -1,6 +1,7 @@
+
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Server, Trash2, Play, CheckCircle, XCircle, Loader2, LockIcon, UnlockIcon, Key } from "lucide-react";
+import { Server, Trash2, Play, CheckCircle, XCircle, Loader2, LockIcon, UnlockIcon, Key, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,8 @@ import { fadeIn, staggerContainer, scaleIn } from "@/components/ui/motion";
 import { useMCPServers, MCPServer } from "@/hooks/use-mcp-servers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import MCPServerCapabilities from "./MCPServerCapabilities";
 
 const MCPCard = ({ 
   mcp, 
@@ -27,6 +30,7 @@ const MCPCard = ({
 }) => {
   const [testing, setTesting] = useState(false);
   const [authenticating, setAuthenticating] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   
   const handleTest = async () => {
     setTesting(true);
@@ -91,60 +95,73 @@ const MCPCard = ({
             </div>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between pt-2">
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-xs"
-              onClick={handleTest}
-              disabled={testing}
-            >
-              {testing ? (
-                <>
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  Testing...
-                </>
-              ) : (
-                <>
-                  <Play className="h-3 w-3 mr-1" />
-                  Test
-                </>
-              )}
-            </Button>
-            
-            {(mcp.requiresAuth && !mcp.isAuthenticated) && (
+        <CardFooter className="flex flex-col gap-4">
+          <div className="flex justify-between w-full">
+            <div className="flex gap-2">
               <Button 
-                variant="secondary" 
+                variant="outline" 
                 size="sm" 
                 className="text-xs"
-                onClick={handleAuthenticate}
-                disabled={authenticating}
+                onClick={handleTest}
+                disabled={testing}
               >
-                {authenticating ? (
+                {testing ? (
                   <>
                     <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Authenticating...
+                    Testing...
                   </>
                 ) : (
                   <>
-                    <Key className="h-3 w-3 mr-1" />
-                    Authenticate
+                    <Play className="h-3 w-3 mr-1" />
+                    Test
                   </>
                 )}
               </Button>
-            )}
+              
+              {(mcp.requiresAuth && !mcp.isAuthenticated) && (
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="text-xs"
+                  onClick={handleAuthenticate}
+                  disabled={authenticating}
+                >
+                  {authenticating ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Authenticating...
+                    </>
+                  ) : (
+                    <>
+                      <Key className="h-3 w-3 mr-1" />
+                      Authenticate
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+            
+            <Button 
+              variant="destructive" 
+              size="sm" 
+              className="text-xs"
+              onClick={() => onRemove(mcp.id)}
+            >
+              <Trash2 className="h-3 w-3 mr-1" />
+              Remove
+            </Button>
           </div>
           
-          <Button 
-            variant="destructive" 
-            size="sm" 
-            className="text-xs"
-            onClick={() => onRemove(mcp.id)}
-          >
-            <Trash2 className="h-3 w-3 mr-1" />
-            Remove
-          </Button>
+          <Accordion type="single" collapsible className="w-full" value={expanded ? "capabilities" : ""} onValueChange={(val) => setExpanded(val === "capabilities")}>
+            <AccordionItem value="capabilities" className="border-none">
+              <AccordionTrigger className="py-1 px-2 -mx-2 rounded-md hover:bg-accent/50">
+                <span className="text-sm font-medium">Server Capabilities</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <MCPServerCapabilities server={mcp} />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </CardFooter>
       </Card>
     </motion.div>
@@ -225,13 +242,23 @@ const MCPsInterface = () => {
         </TabsList>
         
         <TabsContent value="connected" className="mt-0">
-          <div className="mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <Input
               placeholder="Search MCP servers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="max-w-md bg-card border-border"
             />
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
           </div>
           
           <motion.div

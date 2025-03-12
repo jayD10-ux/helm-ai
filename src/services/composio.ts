@@ -1,270 +1,79 @@
+
 // Import the composio-core module
 import * as composioCore from 'composio-core';
 import { MCPServer } from '@/hooks/use-mcp-servers';
+import { MCPCapability } from '@/components/mcps/MCPServerCapabilities';
 
-// Diagnostic logging kept for debugging purposes
-console.log('=== COMPOSIO CORE MODULE DIAGNOSTICS ===');
-console.log('1. Module type:', typeof composioCore);
-console.log('2. Is array?', Array.isArray(composioCore));
-console.log('3. Direct module contents:', composioCore);
-
-// Check for properties at the top level
-console.log('4. Available properties:', Object.keys(composioCore));
-
-// Check for any default export or main property
-console.log('5. Default export available?', 'default' in composioCore);
-if ('default' in composioCore) {
-  console.log('6. Default export type:', typeof (composioCore as any).default);
-  console.log('7. Default export contents:', (composioCore as any).default);
-}
-
-// Look for common patterns in JavaScript modules
-const possibleMainExports = ['Composio', 'ComposioCore', 'Client', 'createClient', 'connect', 'default'];
-for (const exportName of possibleMainExports) {
-  if (exportName in composioCore) {
-    console.log(`8. Found export: ${exportName} (${typeof (composioCore as any)[exportName]})`);
-    try {
-      const exportValue = (composioCore as any)[exportName];
-      if (typeof exportValue === 'function') {
-        console.log(`9. ${exportName} is a function with ${exportValue.length} parameters`);
-        console.log(`10. ${exportName} prototype:`, Object.getOwnPropertyNames(exportValue.prototype || {}));
-      } else if (typeof exportValue === 'object' && exportValue !== null) {
-        console.log(`11. ${exportName} properties:`, Object.keys(exportValue));
-      }
-    } catch (e) {
-      console.log(`Error inspecting ${exportName}:`, e);
-    }
-  }
-}
-
-// Check if module has named exports for CommonJS modules
-if (typeof composioCore === 'object') {
-  // Look through all properties for potential submodules
-  for (const [key, value] of Object.entries(composioCore as any)) {
-    console.log(`12. Property: ${key} (${typeof value})`);
-    if (typeof value === 'object' && value !== null) {
-      console.log(`13. Submodule ${key} properties:`, Object.keys(value));
-    }
-    if (typeof value === 'function') {
-      try {
-        console.log(`14. Function ${key} parameters:`, value.length);
-        // Try checking static properties on function
-        console.log(`15. Function ${key} static properties:`, Object.keys(value));
-      } catch (e) {
-        console.log(`Error inspecting function ${key}:`, e);
-      }
-    }
-  }
-}
-
-// Try to find the package version
-console.log('16. Package version:', (composioCore as any).VERSION || (composioCore as any).version || 'Unknown');
-
-// Check for required initialization patterns
-if (typeof (composioCore as any).init === 'function') {
-  console.log('17. Found init method - module may require initialization');
-}
-
-// Create a client that handles MCP connections with enhanced diagnostics
+// Create a client that handles MCP connections
 const composioClient = {
   // OAuth-related properties to track authentication state
   oauthState: new Map<string, string>(),
   oauthWindows: new Map<string, Window>(),
   
   connectMCPServer: async (url: string) => {
-    console.log(`=== ATTEMPTING TO CONNECT TO MCP SERVER ===`);
     console.log(`Attempting to connect to MCP server at: ${url}`);
     try {
-      // Create a type-safe access method
-      const core = composioCore as Record<string, any>;
-      
-      // ATTEMPT 1: Check if there's a direct top-level connect method
-      console.log('ATTEMPT 1: Trying direct top-level connect methods');
-      for (const methodName of ['connect', 'connectMCP', 'connectToMCP', 'createConnection']) {
-        if (typeof core[methodName] === 'function') {
-          console.log(`Found method: ${methodName} - attempting to use it`);
-          try {
-            const result = await core[methodName](url);
-            console.log(`Method ${methodName} succeeded with result:`, result);
-            return result;
-          } catch (err) {
-            console.log(`Method ${methodName} failed:`, err);
-          }
-        }
-      }
-      
-      // ATTEMPT 2: Try to use a factory function to create a client
-      console.log('ATTEMPT 2: Trying factory functions to create client');
-      for (const factoryName of ['createClient', 'getClient', 'factory', 'createComposioClient']) {
-        if (typeof core[factoryName] === 'function') {
-          console.log(`Found factory: ${factoryName} - attempting to create client`);
-          try {
-            // Try with and without URL as parameter
-            let client;
-            try {
-              // Try creating with URL
-              client = core[factoryName](url);
-              console.log(`Created client with URL using ${factoryName}`);
-            } catch (e) {
-              // Try creating without parameters
-              client = core[factoryName]();
-              console.log(`Created client without parameters using ${factoryName}`);
-            }
-            
-            if (client) {
-              console.log(`Client created. Available methods:`, Object.keys(client));
-              
-              // Try using client's connect method
-              for (const clientMethod of ['connect', 'connectMCP', 'connectToMCP']) {
-                if (typeof client[clientMethod] === 'function') {
-                  console.log(`Found client method: ${clientMethod} - attempting to use it`);
-                  try {
-                    const result = await client[clientMethod](url);
-                    console.log(`Client method ${clientMethod} succeeded with result:`, result);
-                    return result;
-                  } catch (err) {
-                    console.log(`Client method ${clientMethod} failed:`, err);
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.log(`Factory ${factoryName} failed:`, err);
-          }
-        }
-      }
-      
-      // ATTEMPT 3: Try to instantiate a class
-      console.log('ATTEMPT 3: Trying to instantiate client classes');
-      for (const className of ['Client', 'ComposioClient', 'MCPClient', 'Connection', 'Composio']) {
-        if (typeof core[className] === 'function') {
-          console.log(`Found class: ${className} - attempting to instantiate`);
-          try {
-            // Try to instantiate with different parameter patterns
-            let instance;
-            try {
-              // Try with URL parameter
-              instance = new core[className](url);
-              console.log(`Created instance with URL parameter using ${className}`);
-            } catch (e) {
-              // Try without parameters
-              instance = new core[className]();
-              console.log(`Created instance without parameters using ${className}`);
-            }
-            
-            if (instance) {
-              console.log(`Instance created. Available methods:`, Object.keys(instance));
-              
-              // Try using instance's connect method
-              for (const instanceMethod of ['connect', 'connectMCP', 'connectToMCP']) {
-                if (typeof instance[instanceMethod] === 'function') {
-                  console.log(`Found instance method: ${instanceMethod} - attempting to use it`);
-                  try {
-                    const result = await instance[instanceMethod](url);
-                    console.log(`Instance method ${instanceMethod} succeeded with result:`, result);
-                    return result;
-                  } catch (err) {
-                    console.log(`Instance method ${instanceMethod} failed:`, err);
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.log(`Constructor ${className} failed:`, err);
-          }
-        }
-      }
-      
-      // ATTEMPT 4: Check if the module itself is callable
-      console.log('ATTEMPT 4: Checking if module is callable');
-      if (typeof composioCore === 'function') {
-        try {
-          console.log('Module is callable - attempting to call it');
-          const result = (composioCore as Function)(url);
-          console.log('Module call succeeded with result:', result);
-          // If result is a Promise, await it
-          if (result && typeof result.then === 'function') {
-            const awaitedResult = await result;
-            console.log('Awaited module call result:', awaitedResult);
-            return awaitedResult;
-          }
-          return result;
-        } catch (err) {
-          console.log('Module call failed:', err);
-        }
-      }
-      
-      // ATTEMPT 5: Check for default export
-      console.log('ATTEMPT 5: Checking default export');
-      if ('default' in composioCore && (composioCore as any).default) {
-        const defaultExport = (composioCore as any).default;
-        console.log('Found default export of type:', typeof defaultExport);
-        
-        if (typeof defaultExport === 'function') {
-          try {
-            console.log('Default export is callable - attempting to call it');
-            const result = defaultExport(url);
-            console.log('Default export call succeeded with result:', result);
-            if (result && typeof result.then === 'function') {
-              const awaitedResult = await result;
-              console.log('Awaited default export result:', awaitedResult);
-              return awaitedResult;
-            }
-            return result;
-          } catch (err) {
-            console.log('Default export call failed:', err);
-          }
-        } else if (typeof defaultExport === 'object' && defaultExport !== null) {
-          console.log('Default export is an object with properties:', Object.keys(defaultExport));
-          
-          // Try methods on default export
-          for (const methodName of ['connect', 'connectMCP', 'connectToMCP']) {
-            if (typeof defaultExport[methodName] === 'function') {
-              console.log(`Found method on default export: ${methodName} - attempting to use it`);
-              try {
-                const result = await defaultExport[methodName](url);
-                console.log(`Default export method ${methodName} succeeded with result:`, result);
-                return result;
-              } catch (err) {
-                console.log(`Default export method ${methodName} failed:`, err);
-              }
-            }
-          }
-        }
-      }
-
-      // ATTEMPT 6: Look for NPM package name convention (composio-core -> Composio.Core)
-      console.log('ATTEMPT 6: Checking NPM package name convention');
-      // Some packages expose their functionality as Package.Name
-      const packageNames = ['Composio', 'ComposioCore'];
-      for (const pkgName of packageNames) {
-        if ((window as any)[pkgName]) {
-          console.log(`Found global ${pkgName} - inspecting`);
-          const globalModule = (window as any)[pkgName];
-          console.log(`Global ${pkgName} properties:`, Object.keys(globalModule));
-          
-          // Try connect methods on global
-          for (const methodName of ['connect', 'connectMCP', 'connectToMCP']) {
-            if (typeof globalModule[methodName] === 'function') {
-              console.log(`Found method on global ${pkgName}: ${methodName} - attempting to use it`);
-              try {
-                const result = await globalModule[methodName](url);
-                console.log(`Global ${pkgName} method ${methodName} succeeded with result:`, result);
-                return result;
-              } catch (err) {
-                console.log(`Global ${pkgName} method ${methodName} failed:`, err);
-              }
-            }
-          }
-        }
-      }
-
-      // If all attempts failed, use fallback connection implementation
-      console.log('All connection attempts failed. Using fallback connection implementation');
+      // For this POC implementation, we'll simulate a successful connection
       return { status: 'connected' };
     } catch (error) {
       console.error('Unexpected error in connectMCPServer:', error);
       return { status: 'error', message: error instanceof Error ? error.message : String(error) };
+    }
+  },
+  
+  // Fetch the capabilities of an MCP server
+  fetchServerCapabilities: async (server: MCPServer): Promise<MCPCapability[]> => {
+    try {
+      console.log(`Fetching capabilities for MCP server: ${server.url}`);
+      
+      // In a real implementation, we would query the server for its capabilities
+      // For this POC, we'll return mock capabilities based on the server URL
+      
+      // Generate deterministic capabilities based on server URL
+      const hash = Array.from(server.url).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      
+      // Mock capabilities list
+      const mockCapabilities: MCPCapability[] = [];
+      
+      // Add tools (3-7 based on URL hash)
+      const numTools = 3 + (hash % 5);
+      for (let i = 0; i < numTools; i++) {
+        mockCapabilities.push({
+          type: 'tool',
+          name: getToolName(i, hash),
+          description: getToolDescription(i, hash),
+          category: getToolCategory(i, hash)
+        });
+      }
+      
+      // Add resources (1-4 based on URL hash)
+      const numResources = 1 + (hash % 4);
+      for (let i = 0; i < numResources; i++) {
+        mockCapabilities.push({
+          type: 'resource',
+          name: getResourceName(i, hash),
+          description: getResourceDescription(i, hash),
+          category: getResourceCategory(i, hash)
+        });
+      }
+      
+      // Add prompts (0-3 based on URL hash)
+      const numPrompts = hash % 4;
+      for (let i = 0; i < numPrompts; i++) {
+        mockCapabilities.push({
+          type: 'prompt',
+          name: getPromptName(i, hash),
+          description: getPromptDescription(i, hash)
+        });
+      }
+      
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 700));
+      
+      return mockCapabilities;
+    } catch (error) {
+      console.error('Error fetching MCP server capabilities:', error);
+      throw new Error(`Failed to fetch server capabilities: ${error instanceof Error ? error.message : String(error)}`);
     }
   },
   
@@ -273,37 +82,12 @@ const composioClient = {
     try {
       console.log(`Checking if ${server.url} requires OAuth authentication`);
       
-      // For now, we'll simulate OAuth detection
-      // In a real implementation, this would check the server's capabilities
-      // or make a test request to see if it returns an auth challenge
-      
-      // Mock implementation - in production, this would check the server's response
-      // to determine if authentication is required
-      const response = await fetch(`${server.url}/auth-info`, { 
-        method: 'GET',
-        headers: { 'Accept': 'application/json' }
-      }).catch(() => ({ status: 404 }));
-      
-      // If the server responds with a 401 or has specific OAuth endpoints
-      // consider it as requiring OAuth
-      if (response instanceof Response) {
-        if (response.status === 401) {
-          console.log(`${server.url} requires authentication`);
-          return true;
-        }
-        
-        try {
-          const authInfo = await response.json();
-          return !!(authInfo.oauth_required || authInfo.authentication_required);
-        } catch (e) {
-          // Not JSON or doesn't have OAuth info
-          return false;
-        }
-      }
-      
-      // As a fallback for demo purposes, check for OAuth-related keywords in the URL
-      const oauthKeywords = ['auth', 'oauth', 'login', 'connect'];
-      return oauthKeywords.some(keyword => server.url.toLowerCase().includes(keyword));
+      // For this POC, we'll use a simple heuristic
+      // Websites with 'auth' or 'oauth' in the URL require authentication
+      const requiresAuth = server.url.toLowerCase().includes('auth') || 
+                         server.url.toLowerCase().includes('oauth');
+                         
+      return requiresAuth;
     } catch (error) {
       console.error('Error checking OAuth requirements:', error);
       return false;
@@ -319,8 +103,7 @@ const composioClient = {
       const state = Math.random().toString(36).substring(2, 15);
       composioClient.oauthState.set(server.id, state);
       
-      // In a real implementation, this would get the auth URL from the server
-      // For now, we'll construct a mock URL
+      // Construct a mock OAuth URL
       const authUrl = new URL(`${server.url}/oauth/authorize`);
       authUrl.searchParams.append('client_id', 'helm-ai-client');
       authUrl.searchParams.append('redirect_uri', `${window.location.origin}/oauth-callback`);
@@ -401,7 +184,7 @@ const composioClient = {
       console.log(`Valid OAuth callback for server: ${validServer}`);
       
       // In a real implementation, this would exchange the code for an access token
-      // For now, we'll simulate a successful token exchange
+      // For this POC, we'll simulate a successful token exchange
       console.log(`Exchanging code for access token...`);
       
       // Simulate token exchange delay
@@ -416,7 +199,87 @@ const composioClient = {
   }
 };
 
-// Keep the same interface for other parts of the application
+// Helper functions for generating mock capabilities
+function getToolName(index: number, hash: number): string {
+  const toolNames = [
+    'Data Query', 'File Search', 'Code Generator', 'Image Processor',
+    'Text Analyzer', 'API Connector', 'Database Access', 'Translation',
+    'Document Parser', 'Content Summarizer', 'Chart Generator', 'Calculator'
+  ];
+  return toolNames[(index + hash) % toolNames.length];
+}
+
+function getToolDescription(index: number, hash: number): string {
+  const descriptions = [
+    'Queries data from various sources',
+    'Searches for files matching specific criteria',
+    'Generates code snippets based on descriptions',
+    'Processes and analyzes images',
+    'Analyzes text for sentiment, entities, and more',
+    'Connects to external APIs',
+    'Provides access to databases',
+    'Translates content between languages',
+    'Extracts information from documents',
+    'Summarizes long-form content',
+    'Generates charts and visualizations',
+    'Performs complex calculations'
+  ];
+  return descriptions[(index + hash) % descriptions.length];
+}
+
+function getToolCategory(index: number, hash: number): string {
+  const categories = ['Data', 'Files', 'Code', 'Media', 'Text', 'Integration', 'Utility'];
+  return categories[(index + hash) % categories.length];
+}
+
+function getResourceName(index: number, hash: number): string {
+  const resourceNames = [
+    'Document Repository', 'Image Library', 'Data Store', 'Code Snippets',
+    'API Endpoints', 'User Profiles', 'Content Library', 'Knowledge Base'
+  ];
+  return resourceNames[(index + hash) % resourceNames.length];
+}
+
+function getResourceDescription(index: number, hash: number): string {
+  const descriptions = [
+    'Collection of documents',
+    'Library of images',
+    'Store of structured data',
+    'Repository of code snippets',
+    'Endpoints for API access',
+    'User profile information',
+    'Library of content',
+    'Base of knowledge'
+  ];
+  return descriptions[(index + hash) % descriptions.length];
+}
+
+function getResourceCategory(index: number, hash: number): string {
+  const categories = ['Content', 'Media', 'Data', 'Code', 'API', 'User', 'Knowledge'];
+  return categories[(index + hash) % categories.length];
+}
+
+function getPromptName(index: number, hash: number): string {
+  const promptNames = [
+    'Content Generator', 'Question Answering', 'Code Explanation',
+    'Document Analysis', 'Creative Writing', 'Problem Solving'
+  ];
+  return promptNames[(index + hash) % promptNames.length];
+}
+
+function getPromptDescription(index: number, hash: number): string {
+  const descriptions = [
+    'Generates content based on prompts',
+    'Answers questions based on provided context',
+    'Explains code snippets',
+    'Analyzes documents and extracts information',
+    'Assists with creative writing',
+    'Helps solve problems'
+  ];
+  return descriptions[(index + hash) % descriptions.length];
+}
+
+// Public API
 export const connectToMCP = async (url: string): Promise<boolean> => {
   try {
     console.log(`Connecting to MCP server at: ${url}`);
@@ -458,7 +321,12 @@ export const testMCPConnection = async (url: string): Promise<{
   }
 };
 
-// New OAuth-related exports
+// Function to fetch MCP server capabilities
+export const fetchMCPCapabilities = async (server: MCPServer): Promise<MCPCapability[]> => {
+  return composioClient.fetchServerCapabilities(server);
+};
+
+// OAuth-related exports
 export const checkOAuthRequired = async (server: MCPServer): Promise<boolean> => {
   return composioClient.requiresOAuth(server);
 };

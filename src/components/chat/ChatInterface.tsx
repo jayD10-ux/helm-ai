@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Code, Plus, Trash2, Sparkles } from "lucide-react";
@@ -9,6 +8,8 @@ import { fadeIn, staggerContainer, slideIn } from "@/components/ui/motion";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { useMCPServers } from "@/hooks/use-mcp-servers";
+import { fetchMCPCapabilities } from "@/services/composio";
 
 interface Message {
   id: string;
@@ -22,6 +23,13 @@ interface WidgetData {
   description: string;
   type: string;
   config: Record<string, any>;
+}
+
+interface MCPData {
+  serverId: string;
+  serverName: string;
+  capabilities: any[];
+  data?: any;
 }
 
 const ChatBubble = ({ message }: { message: Message }) => {
@@ -63,6 +71,7 @@ const ChatBubble = ({ message }: { message: Message }) => {
 const ChatInterface = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { mcpServers } = useMCPServers();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -202,12 +211,47 @@ const ChatInterface = () => {
     }
   };
   
+  const checkForMCPRelevance = async (userMessage: string) => {
+    const mcpKeywords = [
+      'google sheet', 'spreadsheet', 'document', 'file', 
+      'database', 'api', 'data', 'retrieve', 'get', 'fetch',
+      'connected', 'mcp', 'model context protocol'
+    ];
+    
+    const lowerMessage = userMessage.toLowerCase();
+    const isMCPRelevant = mcpKeywords.some(keyword => lowerMessage.includes(keyword));
+    
+    if (!isMCPRelevant || mcpServers.length === 0) {
+      return null;
+    }
+    
+    const mcpData: MCPData[] = [];
+    
+    for (const server of mcpServers) {
+      if (server.status === "connected") {
+        try {
+          console.log(`Fetching capabilities for MCP server: ${server.name}`);
+          const capabilities = await fetchMCPCapabilities(server);
+          
+          mcpData.push({
+            serverId: server.id,
+            serverName: server.name,
+            capabilities: capabilities
+          });
+        } catch (error) {
+          console.error(`Error fetching capabilities for ${server.name}:`, error);
+        }
+      }
+    }
+    
+    return mcpData.length > 0 ? mcpData : null;
+  };
+  
   const handleSendMessage = async () => {
     if (input.trim() === "" || !chatId) return;
     
     try {
       setLoading(true);
-      // Add user message
       const userMessage: Message = {
         id: Date.now().toString(),
         content: input,
@@ -218,7 +262,6 @@ const ChatInterface = () => {
       setMessages((prev) => [...prev, userMessage]);
       setInput("");
       
-      // Save user message to Supabase
       await supabase
         .from('messages')
         .insert([{
@@ -228,19 +271,22 @@ const ChatInterface = () => {
           timestamp: userMessage.timestamp
         }]);
       
-      // Call the LLM edge function
+      const mcpData = await checkForMCPRelevance(userMessage.content);
+      console.log("MCP data for request:", mcpData);
+      
       const response = await supabase.functions.invoke('llm-chat', {
-        body: { message: userMessage.content, chatId },
+        body: { 
+          message: userMessage.content, 
+          chatId,
+          mcpData: mcpData
+        },
       });
       
       console.log('LLM response:', response.data);
       
-      // Process the response
       if (response.data && response.data.type === "widget_creation") {
-        // Create the widget in the database
         const widgetId = await saveWidgetToDatabase(response.data.widget);
         
-        // Add an AI message about widget creation
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
           content: `${response.data.message} You can view it in the Widgets page or [click here](#) to see it now.`,
@@ -250,7 +296,6 @@ const ChatInterface = () => {
         
         setMessages((prev) => [...prev, aiMessage]);
         
-        // Save AI message to Supabase
         await supabase
           .from('messages')
           .insert([{
@@ -260,7 +305,6 @@ const ChatInterface = () => {
             timestamp: aiMessage.timestamp
           }]);
           
-        // Show a toast notification
         toast({
           title: "Widget Created!",
           description: `"${response.data.widget.name}" has been added to your widgets.`,
@@ -275,7 +319,6 @@ const ChatInterface = () => {
           )
         });
       } else {
-        // Regular text response
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
           content: response.data?.message || "I'm processing your request. This is a placeholder response.",
@@ -285,7 +328,6 @@ const ChatInterface = () => {
         
         setMessages((prev) => [...prev, aiMessage]);
         
-        // Save AI message to Supabase
         await supabase
           .from('messages')
           .insert([{
@@ -303,7 +345,6 @@ const ChatInterface = () => {
         variant: "destructive"
       });
       
-      // Add error message
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: "Sorry, I encountered an error while processing your message. Please try again later.",
@@ -313,7 +354,6 @@ const ChatInterface = () => {
       
       setMessages((prev) => [...prev, errorMessage]);
       
-      // Save error message to Supabase
       if (chatId) {
         await supabase
           .from('messages')
@@ -391,7 +431,7 @@ const ChatInterface = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Try asking to create a widget..."
+            placeholder="Try asking to create a widget or query connected MCP servers..."
             className="min-h-[60px] w-full bg-card border border-border rounded-xl pr-12 resize-none"
             disabled={loading}
           />
@@ -406,6 +446,11 @@ const ChatInterface = () => {
         {loading && (
           <p className="text-xs text-muted-foreground mt-2 animate-pulse">
             AI is thinking...
+          </p>
+        )}
+        {mcpServers.filter(s => s.status === "connected").length > 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            {mcpServers.filter(s => s.status === "connected").length} MCP server(s) connected and available for queries.
           </p>
         )}
       </div>

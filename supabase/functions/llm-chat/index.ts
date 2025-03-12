@@ -17,7 +17,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, chatId } = await req.json();
+    const { message, chatId, mcpData } = await req.json();
     
     if (!message) {
       return new Response(
@@ -27,6 +27,7 @@ serve(async (req) => {
     }
 
     console.log(`Received message: "${message}" for chat ${chatId}`);
+    console.log(`MCP Data available: ${mcpData ? 'Yes' : 'No'}`);
     
     // Check if API key exists
     if (!FIREWORKS_API_KEY) {
@@ -60,6 +61,47 @@ serve(async (req) => {
     // Prepare the system message based on the type of request
     let systemMessage = `You are Helm AI, a helpful AI assistant. Today's date and time is ${currentDateTime}.`;
     
+    // Add MCP capabilities information if available
+    if (mcpData && mcpData.length > 0) {
+      systemMessage += `\n\nYou have access to the following Model Context Protocol (MCP) servers:\n`;
+      
+      mcpData.forEach((server, index) => {
+        systemMessage += `\n${index + 1}. ${server.serverName} with the following capabilities:\n`;
+        
+        if (server.capabilities && server.capabilities.length > 0) {
+          // Group capabilities by type
+          const toolCapabilities = server.capabilities.filter(cap => cap.type === 'tool');
+          const resourceCapabilities = server.capabilities.filter(cap => cap.type === 'resource');
+          const promptCapabilities = server.capabilities.filter(cap => cap.type === 'prompt');
+          
+          if (toolCapabilities.length > 0) {
+            systemMessage += "- Tools:\n";
+            toolCapabilities.forEach(tool => {
+              systemMessage += `  * ${tool.name}: ${tool.description || 'No description available'}\n`;
+            });
+          }
+          
+          if (resourceCapabilities.length > 0) {
+            systemMessage += "- Resources:\n";
+            resourceCapabilities.forEach(resource => {
+              systemMessage += `  * ${resource.name}: ${resource.description || 'No description available'}\n`;
+            });
+          }
+          
+          if (promptCapabilities.length > 0) {
+            systemMessage += "- Prompts:\n";
+            promptCapabilities.forEach(prompt => {
+              systemMessage += `  * ${prompt.name}: ${prompt.description || 'No description available'}\n`;
+            });
+          }
+        } else {
+          systemMessage += "- No specific capabilities detected\n";
+        }
+      });
+      
+      systemMessage += `\nWhen the user asks about data that might be available through these MCP servers, you should mention the relevant capabilities and explain how they could be used to retrieve the requested information.`;
+    }
+    
     if (isWidgetCreationRequest) {
       systemMessage = `You are Helm AI, specialized in creating data widgets. Today's date and time is ${currentDateTime}.
       When asked to create a widget, respond with a JSON object that includes: 
@@ -71,6 +113,11 @@ serve(async (req) => {
       The config object should have sensible defaults. Common dataSources include "gmail", "slack", "weather", "stocks", etc.
       A typical refreshInterval is 300 seconds (5 minutes).
       Layout options include "card", "table", "chart", etc.`;
+      
+      // If MCP servers are connected, add widget creation capabilities
+      if (mcpData && mcpData.length > 0) {
+        systemMessage += `\n\nYou can also suggest creating widgets that use data from connected MCP servers like ${mcpData.map(s => s.serverName).join(', ')}.`;
+      }
     }
     
     // For time-related queries, emphasize the current date/time

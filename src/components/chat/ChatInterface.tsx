@@ -1,19 +1,27 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Code, Plus, Trash2 } from "lucide-react";
+import { Send, Code, Plus, Trash2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { fadeIn, staggerContainer, slideIn } from "@/components/ui/motion";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface Message {
   id: string;
   content: string;
   sender: "user" | "ai";
   timestamp: Date;
+}
+
+interface WidgetData {
+  name: string;
+  description: string;
+  type: string;
+  config: Record<string, any>;
 }
 
 const ChatBubble = ({ message }: { message: Message }) => {
@@ -54,6 +62,7 @@ const ChatBubble = ({ message }: { message: Message }) => {
 
 const ChatInterface = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -174,6 +183,24 @@ const ChatInterface = () => {
       setLoading(false);
     }
   };
+
+  const saveWidgetToDatabase = async (widgetData: WidgetData) => {
+    try {
+      const { data, error } = await supabase
+        .from('widgets')
+        .insert([widgetData])
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      return data[0].id;
+    } catch (error) {
+      console.error('Error saving widget:', error);
+      throw error;
+    }
+  };
   
   const handleSendMessage = async () => {
     if (input.trim() === "" || !chatId) return;
@@ -201,11 +228,22 @@ const ChatInterface = () => {
           timestamp: userMessage.timestamp
         }]);
       
-      // Simulate AI response (would be replaced with actual API call)
-      setTimeout(async () => {
+      // Call the LLM edge function
+      const response = await supabase.functions.invoke('llm-chat', {
+        body: { message: userMessage.content, chatId },
+      });
+      
+      console.log('LLM response:', response.data);
+      
+      // Process the response
+      if (response.data && response.data.type === "widget_creation") {
+        // Create the widget in the database
+        const widgetId = await saveWidgetToDatabase(response.data.widget);
+        
+        // Add an AI message about widget creation
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
-          content: "I'm processing your request. This is a placeholder response that would be replaced with actual AI-generated content based on your input.",
+          content: `${response.data.message} You can view it in the Widgets page or [click here](#) to see it now.`,
           sender: "ai",
           timestamp: new Date()
         };
@@ -222,8 +260,41 @@ const ChatInterface = () => {
             timestamp: aiMessage.timestamp
           }]);
           
-        setLoading(false);
-      }, 1000);
+        // Show a toast notification
+        toast({
+          title: "Widget Created!",
+          description: `"${response.data.widget.name}" has been added to your widgets.`,
+          action: (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/widgets')}
+            >
+              View Widgets
+            </Button>
+          )
+        });
+      } else {
+        // Regular text response
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: response.data?.message || "I'm processing your request. This is a placeholder response.",
+          sender: "ai",
+          timestamp: new Date()
+        };
+        
+        setMessages((prev) => [...prev, aiMessage]);
+        
+        // Save AI message to Supabase
+        await supabase
+          .from('messages')
+          .insert([{
+            content: aiMessage.content,
+            sender: aiMessage.sender,
+            chat_id: chatId,
+            timestamp: aiMessage.timestamp
+          }]);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -231,6 +302,29 @@ const ChatInterface = () => {
         description: "Failed to send your message.",
         variant: "destructive"
       });
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Sorry, I encountered an error while processing your message. Please try again later.",
+        sender: "ai",
+        timestamp: new Date()
+      };
+      
+      setMessages((prev) => [...prev, errorMessage]);
+      
+      // Save error message to Supabase
+      if (chatId) {
+        await supabase
+          .from('messages')
+          .insert([{
+            content: errorMessage.content,
+            sender: errorMessage.sender,
+            chat_id: chatId,
+            timestamp: errorMessage.timestamp
+          }]);
+      }
+    } finally {
       setLoading(false);
     }
   };
@@ -281,6 +375,15 @@ const ChatInterface = () => {
             <Code className="h-4 w-4 mr-2" />
             Code Playground
           </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="bg-secondary/50"
+            onClick={() => window.location.href = '/widgets'}
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            Widgets
+          </Button>
         </div>
         
         <div className="relative">
@@ -288,7 +391,7 @@ const ChatInterface = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Message Helm AI..."
+            placeholder="Try asking to create a widget..."
             className="min-h-[60px] w-full bg-card border border-border rounded-xl pr-12 resize-none"
             disabled={loading}
           />
@@ -300,6 +403,11 @@ const ChatInterface = () => {
             <Send className="h-4 w-4" />
           </Button>
         </div>
+        {loading && (
+          <p className="text-xs text-muted-foreground mt-2 animate-pulse">
+            AI is thinking...
+          </p>
+        )}
       </div>
     </div>
   );

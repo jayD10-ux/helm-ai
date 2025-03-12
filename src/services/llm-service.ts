@@ -1,0 +1,95 @@
+
+import { supabase } from "@/lib/supabase";
+
+interface ChatMessage {
+  content: string;
+  chatId: string | null;
+}
+
+interface WidgetData {
+  name: string;
+  description: string;
+  type: string;
+  config: Record<string, any>;
+  mcp_connections?: any[];
+}
+
+interface LLMResponse {
+  type: string;
+  message: string;
+  widget?: WidgetData;
+}
+
+export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse> => {
+  try {
+    console.log(`Sending message to LLM: "${message.content}"`);
+    
+    const response = await supabase.functions.invoke('llm-chat', {
+      body: { 
+        message: message.content, 
+        chatId: message.chatId 
+      },
+    });
+
+    console.log('LLM response:', response.data);
+    
+    // Handle error in the response
+    if (response.error) {
+      throw new Error(response.error.message || 'An error occurred while processing your request');
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error in LLM service:', error);
+    throw error;
+  }
+};
+
+export const createWidget = async (widgetData: WidgetData): Promise<string> => {
+  try {
+    console.log('Creating widget:', widgetData);
+    
+    const { data, error } = await supabase
+      .from('widgets')
+      .insert([widgetData])
+      .select();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      throw new Error('Failed to create widget: No data returned');
+    }
+
+    return data[0].id;
+  } catch (error) {
+    console.error('Error creating widget:', error);
+    throw error;
+  }
+};
+
+export const getWidgetById = async (id: string): Promise<WidgetData> => {
+  try {
+    const { data, error } = await supabase
+      .from('widgets')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error fetching widget:', error);
+    throw error;
+  }
+};
+
+export const detectWidgetCreationIntent = (message: string): boolean => {
+  // Simple regex to detect widget creation intent
+  const createWidgetRegex = /create\s+a\s+widget\s+.*/i;
+  return createWidgetRegex.test(message);
+};

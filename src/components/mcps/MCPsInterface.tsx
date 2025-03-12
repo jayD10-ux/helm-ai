@@ -45,7 +45,6 @@ const MCPCard = ({
     setAuthenticating(false);
   };
   
-  // Render an auth banner if authentication is required but not completed
   const renderAuthBanner = () => {
     if (mcp.requiresAuth && !mcp.isAuthenticated) {
       return (
@@ -429,6 +428,26 @@ const MCPsInterface = () => {
               <li>Connection to specialized databases and knowledge bases</li>
               <li>Execution of code in various programming environments</li>
             </ul>
+            
+            <div className="mt-6 bg-card/50 p-4 rounded-lg border border-border">
+              <h4 className="text-lg font-medium mb-2 flex items-center">
+                <LockIcon className="h-4 w-4 mr-2" />
+                About MCP Authentication
+              </h4>
+              <p className="text-muted-foreground mb-4">
+                Some MCP servers require authentication to access your data. The authentication process follows these steps:
+              </p>
+              <ol className="list-decimal list-inside space-y-2 text-muted-foreground ml-4">
+                <li>Connect to the MCP server by adding its URL</li>
+                <li>If the server requires authentication, you'll see an "Auth Required" badge</li>
+                <li>Click the "Authenticate" button to start the authentication process</li>
+                <li>A new window will open where you can log in to the service</li>
+                <li>After successful authentication, the server status will update to "Authenticated"</li>
+              </ol>
+              <p className="text-muted-foreground mt-4">
+                Authentication allows Helm AI to access your data securely using OAuth. Your credentials are never stored by Helm AI.
+              </p>
+            </div>
           </div>
         </TabsContent>
         
@@ -479,3 +498,4 @@ async function connectToGoogleSheets() {
 };
 
 export default MCPsInterface;
+

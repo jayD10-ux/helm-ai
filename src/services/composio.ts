@@ -116,6 +116,10 @@ const composioClient = {
       authUrl.searchParams.append('state', state);
       authUrl.searchParams.append('scope', 'read write');
       
+      // Add server ID and name for better UX in the callback page
+      authUrl.searchParams.append('server_id', server.id);
+      authUrl.searchParams.append('server_name', server.name);
+      
       console.log(`Auth URL: ${authUrl.toString()}`);
       
       return { authUrl: authUrl.toString(), state };

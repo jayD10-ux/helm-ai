@@ -3,12 +3,13 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, LockIcon } from "lucide-react";
 
 const OAuthCallback = () => {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<"processing" | "success" | "error">("processing");
   const [message, setMessage] = useState("Processing authentication callback...");
+  const [serverName, setServerName] = useState<string | null>(null);
   
   useEffect(() => {
     const processOAuthCallback = async () => {
@@ -16,6 +17,11 @@ const OAuthCallback = () => {
         const code = searchParams.get('code');
         const state = searchParams.get('state');
         const serverId = searchParams.get('server_id');
+        const serverNameParam = searchParams.get('server_name');
+        
+        if (serverNameParam) {
+          setServerName(serverNameParam);
+        }
         
         if (!code || !state) {
           setStatus("error");
@@ -67,8 +73,9 @@ const OAuthCallback = () => {
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-xl text-center">
-            MCP Authentication
+          <CardTitle className="text-xl text-center flex items-center justify-center">
+            <LockIcon className="h-5 w-5 mr-2" />
+            MCP Authentication {serverName && `- ${serverName}`}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center py-6">
@@ -83,6 +90,18 @@ const OAuthCallback = () => {
           )}
           
           <p className="text-center text-muted-foreground">{message}</p>
+          
+          {status === "success" && (
+            <p className="text-center text-green-600 mt-4">
+              You can now return to Helm AI and use this MCP server with full access.
+            </p>
+          )}
+          
+          {status === "error" && (
+            <p className="text-center text-red-600 mt-4">
+              Please try again or contact support if the problem persists.
+            </p>
+          )}
         </CardContent>
         <CardFooter className="flex justify-center">
           <Button onClick={handleClose}>

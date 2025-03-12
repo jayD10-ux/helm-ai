@@ -3,7 +3,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import MCPsInterface from "@/components/mcps/MCPsInterface";
 import { Toaster } from "@/components/ui/toaster";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { InfoIcon } from "lucide-react";
+import { InfoIcon, LockIcon } from "lucide-react";
 
 const MCPs = () => {
   return (
@@ -14,7 +14,7 @@ const MCPs = () => {
         <AlertDescription>
           For MCP servers that require authentication (like Notion, Google Sheets, etc.), 
           you'll need to authenticate after connecting to allow Helm AI to access your data.
-          Look for the "Auth Required" badge on connected servers.
+          Look for the <span className="inline-flex items-center"><LockIcon className="h-3 w-3 mr-1" /> Auth Required</span> badge on connected servers.
         </AlertDescription>
       </Alert>
       <MCPsInterface />

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Server, Trash2, Play, CheckCircle, XCircle, Loader2, LockIcon, UnlockIcon, Key, RefreshCw, Code, AlertCircle } from "lucide-react";
@@ -50,7 +49,7 @@ const MCPCard = ({
   const renderAuthBanner = () => {
     if (mcp.requiresAuth && !mcp.isAuthenticated) {
       return (
-        <Alert variant="warning" className="mb-4 bg-amber-500/10 border-amber-200">
+        <Alert variant="default" className="mb-4 bg-amber-500/10 border-amber-200">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Authentication Required</AlertTitle>
           <AlertDescription>

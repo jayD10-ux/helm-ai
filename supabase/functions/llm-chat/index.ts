@@ -41,11 +41,27 @@ serve(async (req) => {
     const createWidgetRegex = /create\s+a\s+widget\s+.*/i;
     const isWidgetCreationRequest = createWidgetRegex.test(message);
     
+    // Check if the query is related to time or date
+    const timeRegex = /time|date|day|today|current date|current time|now/i;
+    const isTimeRelatedQuery = timeRegex.test(message);
+    
+    // Get current date and time
+    const now = new Date();
+    const currentDateTime = now.toLocaleString('en-US', { 
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    });
+    
     // Prepare the system message based on the type of request
-    let systemMessage = "You are Helm AI, a helpful AI assistant.";
+    let systemMessage = `You are Helm AI, a helpful AI assistant. Today's date and time is ${currentDateTime}.`;
     
     if (isWidgetCreationRequest) {
-      systemMessage = `You are Helm AI, specialized in creating data widgets. 
+      systemMessage = `You are Helm AI, specialized in creating data widgets. Today's date and time is ${currentDateTime}.
       When asked to create a widget, respond with a JSON object that includes: 
       - name: A concise name for the widget
       - description: A detailed description of what the widget does
@@ -56,6 +72,13 @@ serve(async (req) => {
       A typical refreshInterval is 300 seconds (5 minutes).
       Layout options include "card", "table", "chart", etc.`;
     }
+    
+    // For time-related queries, emphasize the current date/time
+    if (isTimeRelatedQuery) {
+      systemMessage += ` It is very important that you provide accurate current date and time information: ${currentDateTime}.`;
+    }
+    
+    console.log(`Using system message: ${systemMessage}`);
     
     // Call the Fireworks AI API
     const response = await fetch(FIREWORKS_API_URL, {

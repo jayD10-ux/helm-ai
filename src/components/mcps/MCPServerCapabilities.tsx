@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Tool, Package, Database, PanelLeft, Code, Loader2 } from "lucide-react";
+import { Settings, Package, Database, PanelLeft, Code, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,7 @@ const CapabilityItem = ({ capability }: { capability: MCPCapability }) => {
   const getIcon = () => {
     switch (capability.type) {
       case 'tool':
-        return <Tool className="h-4 w-4 mr-2" />;
+        return <Settings className="h-4 w-4 mr-2" />;
       case 'resource':
         return <Database className="h-4 w-4 mr-2" />;
       case 'prompt':
@@ -166,7 +165,7 @@ const MCPServerCapabilities = ({ server }: { server: MCPServer }) => {
               <TabsTrigger value="tools" disabled={toolCapabilities.length === 0} className={cn(
                 toolCapabilities.length === 0 && "opacity-50 cursor-not-allowed"
               )}>
-                <Tool className="h-4 w-4 mr-2" />
+                <Settings className="h-4 w-4 mr-2" />
                 Tools {toolCapabilities.length > 0 && `(${toolCapabilities.length})`}
               </TabsTrigger>
               <TabsTrigger value="resources" disabled={resourceCapabilities.length === 0} className={cn(

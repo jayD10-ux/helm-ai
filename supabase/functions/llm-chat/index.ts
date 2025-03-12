@@ -68,6 +68,13 @@ serve(async (req) => {
       mcpData.forEach((server, index) => {
         systemMessage += `\n${index + 1}. ${server.serverName} with the following capabilities:\n`;
         
+        // Add authentication status information
+        const authStatus = server.isAuthenticated 
+          ? "AUTHENTICATED - You can access user-specific data and perform actions on their behalf" 
+          : "NOT AUTHENTICATED - You cannot access user-specific data until they authenticate";
+        
+        systemMessage += `Authentication Status: ${authStatus}\n`;
+        
         if (server.capabilities && server.capabilities.length > 0) {
           // Group capabilities by type
           const toolCapabilities = server.capabilities.filter(cap => cap.type === 'tool');
@@ -99,7 +106,16 @@ serve(async (req) => {
         }
       });
       
+      // Add guidance on authentication to the system message
+      const unauthenticatedServers = mcpData.filter(server => server.requiresAuth && !server.isAuthenticated);
+      if (unauthenticatedServers.length > 0) {
+        systemMessage += `\n\nIMPORTANT: The following MCP servers require authentication before you can access user-specific data: ${unauthenticatedServers.map(s => s.serverName).join(', ')}. If the user asks about data from these services, inform them they need to authenticate first in the MCP Servers page.`;
+      }
+      
       systemMessage += `\nWhen the user asks about data that might be available through these MCP servers, you should mention the relevant capabilities and explain how they could be used to retrieve the requested information.`;
+      
+      // Add guidance on authentication requirements for specific services
+      systemMessage += `\nIf a user asks to create or access content on services like Notion, Google Sheets, or other personal accounts, check if the corresponding MCP server is authenticated. If not, inform them they need to authenticate with the service first.`;
     }
     
     if (isWidgetCreationRequest) {

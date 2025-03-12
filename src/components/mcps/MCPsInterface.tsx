@@ -1,6 +1,7 @@
+
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Server, Trash2, Play, CheckCircle, XCircle, Loader2, LockIcon, UnlockIcon, Key, RefreshCw, Code } from "lucide-react";
+import { Server, Trash2, Play, CheckCircle, XCircle, Loader2, LockIcon, UnlockIcon, Key, RefreshCw, Code, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { useMCPServers, MCPServer } from "@/hooks/use-mcp-servers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import MCPServerCapabilities from "./MCPServerCapabilities";
 import MCPCodeEditor from "./MCPCodeEditor";
 
@@ -44,6 +46,23 @@ const MCPCard = ({
     setAuthenticating(false);
   };
   
+  // Render an auth banner if authentication is required but not completed
+  const renderAuthBanner = () => {
+    if (mcp.requiresAuth && !mcp.isAuthenticated) {
+      return (
+        <Alert variant="warning" className="mb-4 bg-amber-500/10 border-amber-200">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Authentication Required</AlertTitle>
+          <AlertDescription>
+            This MCP server requires authentication to access your data. 
+            Please authenticate to use this server with the AI assistant.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+    return null;
+  };
+  
   return (
     <motion.div variants={scaleIn}>
       <Card className="glass-morphism h-full">
@@ -52,7 +71,12 @@ const MCPCard = ({
             <CardTitle className="text-lg font-medium">{mcp.name}</CardTitle>
             <div className="flex gap-1">
               {mcp.requiresAuth && (
-                <Badge variant="outline" className="ml-2 bg-amber-500/10 text-amber-600 border-amber-200">
+                <Badge variant="outline" className={cn(
+                  "ml-2 border", 
+                  mcp.isAuthenticated 
+                    ? "bg-green-500/10 text-green-600 border-green-200" 
+                    : "bg-amber-500/10 text-amber-600 border-amber-200"
+                )}>
                   {mcp.isAuthenticated ? (
                     <UnlockIcon className="h-3 w-3 mr-1" />
                   ) : (
@@ -68,6 +92,8 @@ const MCPCard = ({
           </div>
         </CardHeader>
         <CardContent>
+          {renderAuthBanner()}
+          
           <p className="text-sm text-muted-foreground mb-2">
             <span className="font-medium">URL:</span>{" "}
             <a href={mcp.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center">

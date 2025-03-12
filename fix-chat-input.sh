@@ -1,3 +1,7 @@
+#!/bin/bash
+
+# Update ChatInterface.tsx to fix the input positioning
+cat > src/components/chat/ChatInterface.tsx << 'EOL'
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -452,3 +456,6 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+EOL
+
+echo "Fixed chat input positioning in ChatInterface.tsx"

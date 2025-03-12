@@ -1,48 +1,47 @@
-
-import { Button } from "@/components/ui/button";
-import { Plus, Code, Sparkles } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import React from "react";
+import { Plus, History } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ChatHeaderProps {
   onNewChat: () => void;
+  onHistoryClick: () => void;
   isLoading: boolean;
 }
 
-export function ChatHeader({ onNewChat, isLoading }: ChatHeaderProps) {
-  const navigate = useNavigate();
-  
+export function ChatHeader({ onNewChat, onHistoryClick, isLoading }: ChatHeaderProps) {
   return (
-    <div className="flex space-x-2 mb-4 border-b border-border pb-4">
-      <Button 
-        variant="outline" 
-        size="sm" 
-        className="bg-secondary/50"
-        onClick={onNewChat}
-        disabled={isLoading}
-      >
-        <Plus className="h-4 w-4 mr-2" />
-        New Chat
-      </Button>
-      
-      <Button 
-        variant="outline" 
-        size="sm" 
-        className="bg-secondary/50"
-        onClick={() => navigate('/playground')}
-      >
-        <Code className="h-4 w-4 mr-2" />
-        Code Playground
-      </Button>
-      
-      <Button 
-        variant="outline" 
-        size="sm" 
-        className="bg-secondary/50"
-        onClick={() => navigate('/widgets')}
-      >
-        <Sparkles className="h-4 w-4 mr-2" />
-        Widgets
-      </Button>
+    <div className="flex justify-end space-x-2 mb-4 pb-4">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              className="p-2 rounded-full bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              onClick={onHistoryClick}
+              disabled={isLoading}
+            >
+              <History className="h-4 w-4 text-neutral-200" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Chat History</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              className="p-2 rounded-full bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              onClick={onNewChat}
+              disabled={isLoading}
+            >
+              <Plus className="h-4 w-4 text-neutral-200" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>New Chat</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }

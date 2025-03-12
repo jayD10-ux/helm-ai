@@ -1,3 +1,250 @@
+#!/bin/bash
+
+# Fix ChatFooter.tsx
+cat > src/components/chat/ChatFooter.tsx << 'EOL'
+import React from "react";
+import { useMCPServers } from "@/hooks/use-mcp-servers";
+
+interface ChatFooterProps {
+  isLoading: boolean;
+}
+
+export function ChatFooter({ isLoading }: ChatFooterProps) {
+  const { mcpServers } = useMCPServers();
+  
+  return (
+    <div className="mt-2 text-xs text-muted-foreground">
+      {isLoading && (
+        <div className="flex items-center space-x-2 mb-1">
+          <div className="flex space-x-1">
+            <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
+            <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
+            <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
+          </div>
+          <span>AI is thinking...</span>
+        </div>
+      )}
+      {mcpServers.filter(s => s.status === "connected").length > 0 && (
+        <p>
+          {mcpServers.filter(s => s.status === "connected").length} MCP server(s) connected and available for queries.
+        </p>
+      )}
+    </div>
+  );
+}
+EOL
+
+# Fix ChatInput.tsx
+cat > src/components/chat/ChatInput.tsx << 'EOL'
+import React, { useState, KeyboardEvent } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { Send } from "lucide-react";
+
+interface ChatInputProps {
+  onSendMessage: (message: string) => void;
+  isLoading: boolean;
+  placeholder?: string;
+}
+
+export function ChatInput({ 
+  onSendMessage, 
+  isLoading, 
+  placeholder = "Type your message..." 
+}: ChatInputProps) {
+  const [input, setInput] = useState("");
+
+  const handleSendMessage = () => {
+    if (input.trim() === "" || isLoading) return;
+    onSendMessage(input);
+    setInput("");
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  return (
+    <div className="relative">
+      <Textarea
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="min-h-[60px] w-full resize-none border border-neutral-800 bg-neutral-900 rounded-lg px-3 py-2 pr-12 focus-visible:ring-1 focus-visible:ring-neutral-400 focus-visible:outline-none"
+        disabled={isLoading}
+      />
+      <button
+        onClick={handleSendMessage}
+        disabled={input.trim() === "" || isLoading}
+        className="absolute bottom-2 right-2 p-2 rounded-md bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 disabled:hover:bg-neutral-800 transition-colors"
+      >
+        <Send className="h-4 w-4 text-neutral-200" />
+        <span className="sr-only">Send message</span>
+      </button>
+    </div>
+  );
+}
+EOL
+
+# Fix ChatList.tsx
+cat > src/components/chat/ChatList.tsx << 'EOL'
+import React, { forwardRef } from "react";
+import { motion } from "framer-motion";
+import { staggerContainer } from "@/components/ui/motion";
+import { ChatMessage } from "./ChatMessage";
+
+interface Message {
+  id: string;
+  content: string;
+  sender: "user" | "ai";
+  timestamp: Date;
+}
+
+interface ChatListProps {
+  messages: Message[];
+  isLoading?: boolean;
+}
+
+export const ChatList = forwardRef<HTMLDivElement, ChatListProps>(
+  ({ messages, isLoading }, ref) => {
+    return (
+      <div className="flex-1 overflow-y-auto px-4 scrollbar-none">
+        <motion.div
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+          className="space-y-6 pb-6"
+        >
+          {messages.map((message) => (
+            <ChatMessage key={message.id} message={message} />
+          ))}
+          <div ref={ref} />
+        </motion.div>
+      </div>
+    );
+  }
+);
+
+ChatList.displayName = "ChatList";
+EOL
+
+# Fix ChatMessage.tsx
+cat > src/components/chat/ChatMessage.tsx << 'EOL'
+import React from "react";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { slideIn } from "@/components/ui/motion";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Bot, User, Clock } from "lucide-react";
+
+interface Message {
+  id: string;
+  content: string;
+  sender: "user" | "ai";
+  timestamp: Date;
+}
+
+export interface ChatMessageProps {
+  message: Message;
+  isLoading?: boolean;
+}
+
+export function ChatMessage({ message, isLoading }: ChatMessageProps) {
+  const isUser = message.sender === "user";
+  
+  return (
+    <motion.div
+      variants={slideIn}
+      className="group relative flex items-start gap-3"
+    >
+      <div className="flex size-8 shrink-0 select-none items-center justify-center rounded-md bg-neutral-900 shadow">
+        <Avatar className="h-8 w-8">
+          <AvatarFallback className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium",
+            isUser ? "bg-neutral-800 text-neutral-200" : "bg-neutral-800 text-neutral-200"
+          )}>
+            {isUser ? (
+              <User className="h-4 w-4" />
+            ) : (
+              <Bot className="h-4 w-4" />
+            )}
+          </AvatarFallback>
+        </Avatar>
+      </div>
+      <div className="flex-1 space-y-2 overflow-hidden">
+        <div className="flex items-center gap-2">
+          <div className="font-semibold">{isUser ? "You" : "Helm AI"}</div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>
+              {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </div>
+        </div>
+        <div className="prose prose-neutral dark:prose-invert prose-p:leading-relaxed prose-pre:p-0 break-words text-sm">
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+EOL
+
+# Fix ChatHeader.tsx
+cat > src/components/chat/ChatHeader.tsx << 'EOL'
+import React from "react";
+import { Plus, History } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+interface ChatHeaderProps {
+  onNewChat: () => void;
+  isLoading: boolean;
+}
+
+export function ChatHeader({ onNewChat, isLoading }: ChatHeaderProps) {
+  return (
+    <div className="flex justify-end space-x-2 mb-4 pb-4">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              className="p-2 rounded-full bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              onClick={() => {}}
+              disabled={isLoading}
+            >
+              <History className="h-4 w-4 text-neutral-200" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Chat History</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              className="p-2 rounded-full bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              onClick={onNewChat}
+              disabled={isLoading}
+            >
+              <Plus className="h-4 w-4 text-neutral-200" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>New Chat</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+EOL
+
+# Fix ChatInterface.tsx
+cat > src/components/chat/ChatInterface.tsx << 'EOL'
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -8,8 +255,6 @@ import { ChatList } from "./ChatList";
 import { ChatInput } from "./ChatInput";
 import { ChatHeader } from "./ChatHeader";
 import { ChatFooter } from "./ChatFooter";
-import { ChatHistory } from "./ChatHistory";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 interface Message {
   id: string;
@@ -32,12 +277,6 @@ interface MCPData {
   data?: any;
 }
 
-interface Chat {
-  id: string;
-  title: string;
-  created_at: string;
-}
-
 const ChatInterface = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -52,8 +291,6 @@ const ChatInterface = () => {
   ]);
   const [loading, setLoading] = useState(false);
   const [chatId, setChatId] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [chatHistory, setChatHistory] = useState<Chat[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const scrollToBottom = () => {
@@ -68,18 +305,6 @@ const ChatInterface = () => {
   useEffect(() => {
     const loadInitialChat = async () => {
       try {
-        // Get all chats for history
-        const { data: allChats, error: historyError } = await supabase
-          .from('chats')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (historyError) throw historyError;
-        
-        if (allChats) {
-          setChatHistory(allChats);
-        }
-        
         // Get the most recent chat
         const { data: chats, error: chatError } = await supabase
           .from('chats')
@@ -159,9 +384,6 @@ const ChatInterface = () => {
           timestamp: welcomeMessage.timestamp
         }]);
         
-        // Update chat history
-        setChatHistory(prev => [data[0], ...prev]);
-        
         toast({
           title: "New chat created",
           description: "Started a fresh conversation with Helm AI."
@@ -172,42 +394,6 @@ const ChatInterface = () => {
       toast({
         title: "Error creating new chat",
         description: "Failed to start a new conversation.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadChat = async (selectedChatId: string) => {
-    try {
-      setLoading(true);
-      setChatId(selectedChatId);
-      
-      const { data: messageData, error: messagesError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('chat_id', selectedChatId)
-        .order('timestamp', { ascending: true });
-        
-      if (messagesError) throw messagesError;
-      
-      if (messageData && messageData.length > 0) {
-        setMessages(messageData.map(msg => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        })));
-      } else {
-        setMessages([]);
-      }
-      
-      // Close history sidebar
-      setHistoryOpen(false);
-    } catch (error) {
-      console.error('Error loading chat:', error);
-      toast({
-        title: "Error loading chat",
-        description: "Failed to load the selected conversation.",
         variant: "destructive"
       });
     } finally {
@@ -390,45 +576,18 @@ const ChatInterface = () => {
   };
   
   return (
-    <div className="flex flex-col h-full relative">
-      <ChatHeader 
-        onNewChat={createNewChat} 
-        isLoading={loading} 
-        onHistoryClick={() => setHistoryOpen(true)}
-      />
+    <div className="flex flex-col h-full">
+      <ChatHeader onNewChat={createNewChat} isLoading={loading} />
       
-      <div className="flex-1 overflow-auto" style={{ paddingBottom: "120px" }}>
+      <div className="flex-1 overflow-auto">
         <ChatList 
           messages={messages} 
           ref={messagesEndRef}
           isLoading={loading}
         />
-        
-        {loading && messages[messages.length - 1]?.sender === "user" && (
-          <div className="flex items-start gap-3 p-4">
-            <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border bg-primary text-primary-foreground">
-              <div className="text-sm font-semibold">AI</div>
-            </div>
-            <div className="flex flex-col gap-2 min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="font-semibold">Helm AI</div>
-              </div>
-              <div className="prose prose-neutral dark:prose-invert">
-                <div className="flex items-center space-x-2">
-                  <div className="flex space-x-1">
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">AI is thinking...</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
       
-      <div className="sticky bottom-0 left-0 w-full bg-background border-t border-neutral-800 pt-2 pb-4 px-4 z-10">
+      <div className="sticky bottom-0 bg-background border-t border-neutral-800 pt-2 pb-4 px-4">
         <ChatInput 
           onSendMessage={handleSendMessage} 
           isLoading={loading}
@@ -437,18 +596,11 @@ const ChatInterface = () => {
         
         <ChatFooter isLoading={loading} />
       </div>
-      
-      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent side="right" className="w-[350px] sm:w-[450px]">
-          <ChatHistory 
-            chats={chatHistory} 
-            onSelectChat={loadChat}
-            currentChatId={chatId || ""}
-          />
-        </SheetContent>
-      </Sheet>
     </div>
   );
 };
 
 export default ChatInterface;
+EOL
+
+echo "All import errors have been fixed!"

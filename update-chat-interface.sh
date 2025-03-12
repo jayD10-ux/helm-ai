@@ -1,3 +1,159 @@
+#!/bin/bash
+
+# Update ChatHeader.tsx
+cat > src/components/chat/ChatHeader.tsx << 'EOL'
+import React from "react";
+import { Plus, History } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+interface ChatHeaderProps {
+  onNewChat: () => void;
+  onHistoryClick: () => void;
+  isLoading: boolean;
+}
+
+export function ChatHeader({ onNewChat, onHistoryClick, isLoading }: ChatHeaderProps) {
+  return (
+    <div className="flex justify-end space-x-2 mb-4 pb-4">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              className="p-2 rounded-full bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              onClick={onHistoryClick}
+              disabled={isLoading}
+            >
+              <History className="h-4 w-4 text-neutral-200" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Chat History</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              className="p-2 rounded-full bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              onClick={onNewChat}
+              disabled={isLoading}
+            >
+              <Plus className="h-4 w-4 text-neutral-200" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>New Chat</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+EOL
+
+# Update ChatFooter.tsx with improved loader
+cat > src/components/chat/ChatFooter.tsx << 'EOL'
+import React from "react";
+import { useMCPServers } from "@/hooks/use-mcp-servers";
+
+interface ChatFooterProps {
+  isLoading: boolean;
+}
+
+export function ChatFooter({ isLoading }: ChatFooterProps) {
+  const { mcpServers } = useMCPServers();
+  
+  return (
+    <div className="mt-2 text-xs text-muted-foreground">
+      {isLoading && (
+        <div className="flex items-center space-x-2 mb-1">
+          <div className="flex space-x-1">
+            <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
+            <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
+            <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
+          </div>
+          <span>AI is thinking...</span>
+        </div>
+      )}
+      {mcpServers.filter(s => s.status === "connected").length > 0 && (
+        <p>
+          {mcpServers.filter(s => s.status === "connected").length} MCP server(s) connected and available for queries.
+        </p>
+      )}
+    </div>
+  );
+}
+EOL
+
+# Create ChatHistory.tsx
+cat > src/components/chat/ChatHistory.tsx << 'EOL'
+import React from "react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Clock, MessageSquare } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+
+interface Chat {
+  id: string;
+  title: string;
+  created_at: string;
+}
+
+interface ChatHistoryProps {
+  chats: Chat[];
+  onSelectChat: (chatId: string) => void;
+  currentChatId: string;
+}
+
+export function ChatHistory({ chats, onSelectChat, currentChatId }: ChatHistoryProps) {
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold">Chat History</h2>
+      </div>
+      
+      <ScrollArea className="flex-1">
+        <div className="space-y-2 pr-4">
+          {chats.length === 0 ? (
+            <div className="text-center text-muted-foreground py-8">
+              No chat history found
+            </div>
+          ) : (
+            chats.map((chat) => (
+              <button
+                key={chat.id}
+                onClick={() => onSelectChat(chat.id)}
+                className={`w-full text-left p-3 rounded-lg transition-colors ${
+                  chat.id === currentChatId
+                    ? "bg-neutral-800"
+                    : "hover:bg-neutral-900"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-800 bg-neutral-900">
+                    <MessageSquare className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 space-y-1 overflow-hidden">
+                    <p className="font-medium truncate">{chat.title}</p>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>
+                        {formatDistanceToNow(new Date(chat.created_at), { addSuffix: true })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+EOL
+
+# Update ChatInterface.tsx
+cat > src/components/chat/ChatInterface.tsx << 'EOL'
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -397,38 +553,15 @@ const ChatInterface = () => {
         onHistoryClick={() => setHistoryOpen(true)}
       />
       
-      <div className="flex-1 overflow-auto" style={{ paddingBottom: "120px" }}>
+      <div className="flex-1 overflow-auto mb-[120px]">
         <ChatList 
           messages={messages} 
           ref={messagesEndRef}
           isLoading={loading}
         />
-        
-        {loading && messages[messages.length - 1]?.sender === "user" && (
-          <div className="flex items-start gap-3 p-4">
-            <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border bg-primary text-primary-foreground">
-              <div className="text-sm font-semibold">AI</div>
-            </div>
-            <div className="flex flex-col gap-2 min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="font-semibold">Helm AI</div>
-              </div>
-              <div className="prose prose-neutral dark:prose-invert">
-                <div className="flex items-center space-x-2">
-                  <div className="flex space-x-1">
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">AI is thinking...</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
       
-      <div className="sticky bottom-0 left-0 w-full bg-background border-t border-neutral-800 pt-2 pb-4 px-4 z-10">
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-neutral-800 pt-2 pb-4 px-4">
         <ChatInput 
           onSendMessage={handleSendMessage} 
           isLoading={loading}
@@ -452,3 +585,9 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+EOL
+
+# Install date-fns if not already installed
+npm install --save date-fns
+
+echo "All chat interface components have been updated!"

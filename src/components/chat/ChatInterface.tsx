@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useMCPServers } from "@/hooks/use-mcp-servers";
 import { supabase } from "@/lib/supabase";
 import { fetchMCPCapabilities } from "@/services/composio";
+import { Button } from "@/components/ui/button";
 import { ChatList } from "./ChatList";
 import { ChatInput } from "./ChatInput";
 import { ChatHeader } from "./ChatHeader";

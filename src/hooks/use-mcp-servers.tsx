@@ -216,17 +216,21 @@ export const useMCPServers = () => {
     }
   };
 
-  const addMCPServer = async (url: string, connectionType: "sse" | "websocket") => {
-    if (!url.trim()) return;
+  const addMCPServer = async (url: string, connectionType: "sse" | "websocket", customName?: string) => {
+    if (!url.trim()) return null;
     
     try {
       setLoading(true);
       
-      // Extract name from URL
-      const urlObj = new URL(url);
-      const pathSegments = urlObj.pathname.split('/').filter(Boolean);
-      const suggestedName = pathSegments.length > 0 ? 
-        pathSegments[pathSegments.length - 1] : urlObj.hostname;
+      // Extract name from URL or use custom name if provided
+      let suggestedName = customName;
+      
+      if (!suggestedName) {
+        const urlObj = new URL(url);
+        const pathSegments = urlObj.pathname.split('/').filter(Boolean);
+        suggestedName = pathSegments.length > 0 ? 
+          pathSegments[pathSegments.length - 1] : urlObj.hostname;
+      }
       
       // Basic validation
       const isValid = url.startsWith('http');

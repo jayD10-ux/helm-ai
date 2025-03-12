@@ -1,7 +1,6 @@
-
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Server, Trash2, Play, CheckCircle, XCircle, Loader2, LockIcon, UnlockIcon, Key, RefreshCw } from "lucide-react";
+import { Server, Trash2, Play, CheckCircle, XCircle, Loader2, LockIcon, UnlockIcon, Key, RefreshCw, Code } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import MCPServerCapabilities from "./MCPServerCapabilities";
+import MCPCodeEditor from "./MCPCodeEditor";
 
 const MCPCard = ({ 
   mcp, 
@@ -211,6 +211,29 @@ const MCPsInterface = () => {
     }
   };
   
+  const handleAddServerFromCode = async (serverConfig: Partial<MCPServer>) => {
+    if (!serverConfig.url || !serverConfig.url.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a valid MCP server URL in your code",
+        variant: "destructive"
+      });
+      return null;
+    }
+    
+    try {
+      const server = await addMCPServer(
+        serverConfig.url, 
+        serverConfig.connectionType || "sse",
+        serverConfig.name
+      );
+      return server;
+    } catch (error) {
+      console.error("Error adding server from code:", error);
+      throw error;
+    }
+  };
+  
   const handleTestServer = async (server: MCPServer) => {
     await testMCPServer(server);
   };
@@ -238,6 +261,10 @@ const MCPsInterface = () => {
           </TabsTrigger>
           <TabsTrigger value="add" className="flex-1 max-w-[200px] data-[state=active]:bg-secondary">
             Add New Server
+          </TabsTrigger>
+          <TabsTrigger value="typescript" className="flex-1 max-w-[200px] data-[state=active]:bg-secondary">
+            <Code className="h-4 w-4 mr-2" />
+            TypeScript
           </TabsTrigger>
         </TabsList>
         
@@ -377,6 +404,48 @@ const MCPsInterface = () => {
               <li>Connection to specialized databases and knowledge bases</li>
               <li>Execution of code in various programming environments</li>
             </ul>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="typescript" className="mt-0">
+          <MCPCodeEditor onAddServer={handleAddServerFromCode} />
+          
+          <div className="space-y-4">
+            <h3 className="text-xl font-medium">Using TypeScript with MCP</h3>
+            <p className="text-muted-foreground">
+              The Model Context Protocol (MCP) can be configured and connected using TypeScript code. 
+              This provides more flexibility and allows for integration with existing code bases.
+            </p>
+            
+            <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
+              <li>Define server configurations with TypeScript</li>
+              <li>Easily reuse connection code across applications</li>
+              <li>Integrate with other TypeScript libraries and frameworks</li>
+              <li>Handle advanced connection scenarios</li>
+            </ul>
+            
+            <div className="bg-muted/30 p-4 rounded-md mt-4">
+              <h4 className="font-medium mb-2">Example: Connecting to Google Sheets MCP</h4>
+              <pre className="text-xs text-muted-foreground overflow-auto">
+{`import { McpClient } from "composio-core";
+
+const mcpConfig = {
+  url: "https://mcp.composio.dev/googlesheets/your-sheet-id",
+  connectionType: "sse"
+};
+
+async function connectToGoogleSheets() {
+  const client = new McpClient();
+  await client.connect(mcpConfig.url);
+  
+  // Get available capabilities
+  const capabilities = await client.getCapabilities();
+  console.log("Available capabilities:", capabilities);
+  
+  return true;
+}`}
+              </pre>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

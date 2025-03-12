@@ -1,4 +1,3 @@
-
 // Import the composio-core module
 import * as composioCore from 'composio-core';
 import { MCPServer } from '@/hooks/use-mcp-servers';
@@ -14,6 +13,12 @@ const composioClient = {
     console.log(`Attempting to connect to MCP server at: ${url}`);
     try {
       // For this POC implementation, we'll simulate a successful connection
+      // In a real implementation, we would use the composio-core library to establish a connection
+      
+      // Here's how we might implement it with the real library:
+      // const mcpClient = new composioCore.McpClient();
+      // await mcpClient.connect(url);
+      
       return { status: 'connected' };
     } catch (error) {
       console.error('Unexpected error in connectMCPServer:', error);

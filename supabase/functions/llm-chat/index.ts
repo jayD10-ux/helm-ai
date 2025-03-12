@@ -7,41 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Since we don't have a Fireworks API key in the secrets yet,
-// we'll use a mock LLM response for testing
-function mockLLMResponse(input: string) {
-  console.log("Processing input with mock LLM:", input);
-  
-  // Check if the message is about creating a widget
-  const createWidgetRegex = /create\s+a\s+widget\s+.*/i;
-  if (createWidgetRegex.test(input)) {
-    // Extract the purpose of the widget from the input
-    const purpose = input.replace(/create\s+a\s+widget\s+/i, "").trim();
-    
-    // Mock response for widget creation
-    return {
-      type: "widget_creation",
-      widget: {
-        name: `${purpose.split(" ").slice(0, 3).join(" ")} Widget`,
-        description: purpose,
-        type: "custom",
-        config: {
-          dataSource: purpose.includes("gmail") ? "gmail" : 
-                     purpose.includes("slack") ? "slack" : "custom",
-          refreshInterval: 300, // 5 minutes in seconds
-          layout: "card"
-        }
-      },
-      message: `I've created a widget to ${purpose}. You can find it in your widgets dashboard.`
-    };
-  }
-  
-  // Default response for other messages
-  return {
-    type: "text",
-    message: `I'm your AI assistant. I can help you create widgets for different purposes. Try asking me to "Create a widget that shows weather forecasts" or "Create a widget that displays my recent emails".`
-  };
-}
+const FIREWORKS_API_KEY = Deno.env.get("FIREWORKS_API_KEY");
+const FIREWORKS_API_URL = "https://api.fireworks.ai/inference/v1/chat/completions";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -61,15 +28,158 @@ serve(async (req) => {
 
     console.log(`Received message: "${message}" for chat ${chatId}`);
     
-    // In a production environment, this would call an actual LLM API
-    // For now, we'll use our mock function
-    const llmResponse = mockLLMResponse(message);
+    // Check if API key exists
+    if (!FIREWORKS_API_KEY) {
+      console.error("Fireworks API key not found in environment variables");
+      return new Response(
+        JSON.stringify({ error: "API configuration error" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
-    // Return the LLM response
-    return new Response(
-      JSON.stringify(llmResponse),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // Check if the message is about creating a widget
+    const createWidgetRegex = /create\s+a\s+widget\s+.*/i;
+    const isWidgetCreationRequest = createWidgetRegex.test(message);
+    
+    // Prepare the system message based on the type of request
+    let systemMessage = "You are Helm AI, a helpful AI assistant.";
+    
+    if (isWidgetCreationRequest) {
+      systemMessage = `You are Helm AI, specialized in creating data widgets. 
+      When asked to create a widget, respond with a JSON object that includes: 
+      - name: A concise name for the widget
+      - description: A detailed description of what the widget does
+      - type: Should be "custom" 
+      - config: An object containing relevant configuration options like dataSource, refreshInterval, layout
+      
+      The config object should have sensible defaults. Common dataSources include "gmail", "slack", "weather", "stocks", etc.
+      A typical refreshInterval is 300 seconds (5 minutes).
+      Layout options include "card", "table", "chart", etc.`;
+    }
+    
+    // Call the Fireworks AI API
+    const response = await fetch(FIREWORKS_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${FIREWORKS_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "accounts/fireworks/models/mixtral-8x7b-instruct",
+        messages: [
+          {
+            role: "system",
+            content: systemMessage
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 800
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Fireworks API error:", errorText);
+      throw new Error(`Fireworks API error: ${response.status} ${errorText}`);
+    }
+    
+    const fireworksResponse = await response.json();
+    console.log("Fireworks API response:", JSON.stringify(fireworksResponse));
+    
+    const assistantMessage = fireworksResponse.choices[0]?.message?.content || "";
+    
+    // Process the response based on the request type
+    if (isWidgetCreationRequest) {
+      try {
+        // Try to extract JSON from the response - it might be embedded in text
+        const jsonMatch = assistantMessage.match(/\{[\s\S]*\}/);
+        const jsonStr = jsonMatch ? jsonMatch[0] : null;
+        
+        if (jsonStr) {
+          // Parse the JSON widget definition
+          const widgetData = JSON.parse(jsonStr);
+          
+          // Validate the widget data
+          if (widgetData.name && widgetData.description) {
+            return new Response(
+              JSON.stringify({
+                type: "widget_creation",
+                widget: {
+                  name: widgetData.name,
+                  description: widgetData.description,
+                  type: widgetData.type || "custom",
+                  config: widgetData.config || {
+                    dataSource: "custom",
+                    refreshInterval: 300,
+                    layout: "card"
+                  }
+                },
+                message: `I've created a widget called "${widgetData.name}". ${widgetData.description}`
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+        
+        // Fallback if we couldn't parse JSON or validate widget data
+        // Extract the purpose from the original message
+        const purpose = message.replace(/create\s+a\s+widget\s+/i, "").trim();
+        
+        return new Response(
+          JSON.stringify({
+            type: "widget_creation",
+            widget: {
+              name: `${purpose.split(" ").slice(0, 3).join(" ")} Widget`,
+              description: purpose,
+              type: "custom",
+              config: {
+                dataSource: purpose.includes("gmail") ? "gmail" : 
+                           purpose.includes("slack") ? "slack" : "custom",
+                refreshInterval: 300,
+                layout: "card"
+              }
+            },
+            message: `I've created a widget to ${purpose}. You can find it in your widgets dashboard.`
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (error) {
+        console.error("Error processing widget creation:", error);
+        // Return a fallback widget if JSON parsing fails
+        const purpose = message.replace(/create\s+a\s+widget\s+/i, "").trim();
+        
+        return new Response(
+          JSON.stringify({
+            type: "widget_creation",
+            widget: {
+              name: `${purpose.split(" ").slice(0, 3).join(" ")} Widget`,
+              description: purpose,
+              type: "custom",
+              config: {
+                dataSource: "custom",
+                refreshInterval: 300,
+                layout: "card"
+              }
+            },
+            message: `I've created a widget to ${purpose}. You can find it in your widgets dashboard.`
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      // For regular chat messages, return the LLM response directly
+      return new Response(
+        JSON.stringify({
+          type: "text",
+          message: assistantMessage
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
   } catch (error) {
     console.error("Error in llm-chat function:", error);
     

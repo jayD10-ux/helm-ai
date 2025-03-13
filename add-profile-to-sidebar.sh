@@ -1,3 +1,7 @@
+#!/bin/bash
+
+# Add the profile back to the bottom of the sidebar
+cat > src/components/layout/Sidebar.tsx << 'EOL'
 import { cn } from "@/lib/utils";
 import { 
   Terminal, 
@@ -59,9 +63,9 @@ const Sidebar = () => {
   return (
     <TooltipProvider>
       <div
-        className="fixed top-0 left-0 bottom-0 w-[80px] bg-background border-r border-neutral-800 flex flex-col z-20"
+        className="fixed top-0 left-0 bottom-0 w-[80px] bg-background border-r border-neutral-800 flex flex-col"
       >
-        <div className="flex flex-col items-center justify-center h-16">
+        <div className="flex flex-col items-center justify-center h-16 border-b border-neutral-800">
           <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary text-primary-foreground">
             <Network className="h-5 w-5" />
           </div>
@@ -82,7 +86,7 @@ const Sidebar = () => {
           </nav>
         </div>
         
-        <div className="p-4">
+        <div className="p-4 border-t border-neutral-800">
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex items-center justify-center">
@@ -103,3 +107,6 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
+EOL
+
+echo "Added profile back to the bottom of the sidebar!"

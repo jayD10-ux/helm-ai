@@ -1,10 +1,13 @@
+#!/bin/bash
+
+# Update the Sidebar component to remove the expand/collapse functionality
+cat > src/components/layout/Sidebar.tsx << 'EOL'
 import { cn } from "@/lib/utils";
 import { 
   Terminal, 
   MessageSquare, 
   Component, 
-  Settings,
-  Network
+  Settings
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -59,9 +62,9 @@ const Sidebar = () => {
   return (
     <TooltipProvider>
       <div
-        className="fixed top-0 left-0 bottom-0 w-[80px] bg-background border-r border-neutral-800 flex flex-col z-20"
+        className="fixed top-0 left-0 bottom-0 w-[80px] bg-background border-r border-neutral-800 flex flex-col"
       >
-        <div className="flex flex-col items-center justify-center h-16">
+        <div className="flex flex-col items-center justify-center h-16 border-b border-neutral-800">
           <div className="flex items-center justify-center w-10 h-10 rounded-md bg-primary text-primary-foreground">
             <Network className="h-5 w-5" />
           </div>
@@ -81,25 +84,12 @@ const Sidebar = () => {
             ))}
           </nav>
         </div>
-        
-        <div className="p-4">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center justify-center">
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                  <span className="text-xs font-medium text-primary">AI</span>
-                </div>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p className="text-sm font-medium">User Account</p>
-              <p className="text-xs text-muted-foreground">Free Plan</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
       </div>
     </TooltipProvider>
   );
 };
 
 export default Sidebar;
+EOL
+
+echo "Removed sidebar expand functionality!"

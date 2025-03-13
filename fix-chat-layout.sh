@@ -1,3 +1,75 @@
+#!/bin/bash
+
+# Update ChatHeader.tsx - Fix buttons at the top of the screen
+cat > src/components/chat/ChatHeader.tsx << 'EOL'
+import React from "react";
+import { Plus, History } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+interface ChatHeaderProps {
+  onNewChat: () => void;
+  onHistoryClick: () => void;
+  isLoading: boolean;
+}
+
+export function ChatHeader({ onNewChat, onHistoryClick, isLoading }: ChatHeaderProps) {
+  return (
+    <div className="sticky top-0 z-10 flex justify-end space-x-2 mb-4 pb-4 pt-2 px-4 bg-background">
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              className="p-2 rounded-full bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              onClick={onHistoryClick}
+              disabled={isLoading}
+            >
+              <History className="h-4 w-4 text-neutral-200" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Chat History</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button 
+              className="p-2 rounded-full bg-neutral-800 hover:bg-neutral-700 transition-colors"
+              onClick={onNewChat}
+              disabled={isLoading}
+            >
+              <Plus className="h-4 w-4 text-neutral-200" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>New Chat</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+EOL
+
+# Update ChatFooter.tsx - Remove "AI is thinking" and MCP server info
+cat > src/components/chat/ChatFooter.tsx << 'EOL'
+import React from "react";
+
+interface ChatFooterProps {
+  isLoading: boolean;
+}
+
+export function ChatFooter({ isLoading }: ChatFooterProps) {
+  return (
+    <div className="mt-2 text-xs text-muted-foreground">
+      {/* Footer content removed as requested */}
+    </div>
+  );
+}
+EOL
+
+# Update ChatInterface.tsx - Fix input at bottom and update layout
+cat > src/components/chat/ChatInterface.tsx << 'EOL'
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -390,7 +462,7 @@ const ChatInterface = () => {
   };
   
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full">
       <ChatHeader 
         onNewChat={createNewChat} 
         isLoading={loading} 
@@ -428,16 +500,14 @@ const ChatInterface = () => {
         )}
       </div>
       
-      <div className="fixed bottom-0 right-0 bg-background pt-2 pb-4 z-10 w-[calc(100%-80px)]">
-        <div className="max-w-[1200px] mx-auto px-4">
-          <ChatInput 
-            onSendMessage={handleSendMessage} 
-            isLoading={loading}
-            placeholder="Type your message..."
-          />
-          
-          <ChatFooter isLoading={loading} />
-        </div>
+      <div className="fixed bottom-0 left-[240px] right-0 bg-background border-t border-neutral-800 pt-2 pb-4 px-4 z-10">
+        <ChatInput 
+          onSendMessage={handleSendMessage} 
+          isLoading={loading}
+          placeholder="Type your message..."
+        />
+        
+        <ChatFooter isLoading={loading} />
       </div>
       
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
@@ -454,3 +524,6 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+EOL
+
+echo "Fixed chat layout issues!"

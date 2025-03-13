@@ -10,7 +10,7 @@ interface ChatHeaderProps {
 
 export function ChatHeader({ onNewChat, onHistoryClick, isLoading }: ChatHeaderProps) {
   return (
-    <div className="flex justify-end space-x-2 mb-4 pb-4">
+    <div className="sticky top-0 z-10 flex justify-end space-x-2 mb-4 pb-4 pt-2 px-4 bg-background">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>

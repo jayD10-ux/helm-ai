@@ -61,8 +61,8 @@ serve(async (req) => {
     // Prepare the system message based on the type of request
     let systemMessage = `You are Helm AI, a helpful AI assistant. Today's date and time is ${currentDateTime}.`;
     
-    // Add MCP capabilities information if available
-    if (mcpData && mcpData.length > 0) {
+    // Add MCP capabilities information if available and this is NOT a widget creation request
+    if (mcpData && mcpData.length > 0 && !isWidgetCreationRequest) {
       systemMessage += `\n\nYou have access to the following Model Context Protocol (MCP) servers:\n`;
       
       mcpData.forEach((server, index) => {
@@ -119,6 +119,8 @@ serve(async (req) => {
     }
     
     if (isWidgetCreationRequest) {
+      // For widget creation, use a dedicated system message that focuses on creating React widgets
+      // without mentioning MCP servers unless they're specifically relevant to the request
       systemMessage = `You are Helm AI, specialized in creating React widgets using the shadcn/ui component system and Tailwind CSS. Today's date and time is ${currentDateTime}.
       
       When asked to create a widget, you must respond ONLY with a JSON object that includes:
@@ -147,6 +149,10 @@ serve(async (req) => {
       The config object should have sensible defaults like refreshInterval: 300 seconds (5 minutes).
       Layout options include "card", "table", "chart", etc.
       
+      IMPORTANT: Create the widget based ONLY on the user's request. Do NOT assume any external integration 
+      is required unless explicitly mentioned in the user's request. Create a standalone widget that works 
+      with mock data by default.
+      
       Example component structure:
       \`\`\`jsx
       export default function Widget() {
@@ -173,9 +179,12 @@ serve(async (req) => {
       }
       \`\`\``;
       
-      // If MCP servers are connected, add widget creation capabilities
+      // Only mention MCP servers as an optional integration if they're available,
+      // but make it clear they should only be used if specifically relevant to the request
       if (mcpData && mcpData.length > 0) {
-        systemMessage += `\n\nYou can also suggest creating widgets that use data from connected MCP servers like ${mcpData.map(s => s.serverName).join(', ')}.`;
+        systemMessage += `\n\nOPTIONAL: If the user's widget request SPECIFICALLY mentions data from services 
+        like ${mcpData.map(s => s.serverName).join(', ')}, you MAY suggest using these connections. 
+        However, by default, create a standalone widget using mock data that does not require any external API.`;
       }
     }
     

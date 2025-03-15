@@ -12,7 +12,7 @@ export function ChatFooter({ isLoading }: ChatFooterProps) {
       {!isLoading && (
         <div className="flex items-center gap-1">
           <Info className="w-3 h-3" />
-          <span>Try: "Create a widget that shows a to-do list with tasks and priorities"</span>
+          <span>Try: "Create a widget that sends personalized WhatsApp messages to new customers"</span>
         </div>
       )}
     </div>

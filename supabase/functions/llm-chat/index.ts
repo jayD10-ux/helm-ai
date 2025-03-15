@@ -153,6 +153,19 @@ serve(async (req) => {
       is required unless explicitly mentioned in the user's request. Create a standalone widget that works 
       with mock data by default.
       
+      CRITICAL: NEVER suggest or mention external APIs, services, or tools like Notion, Google Sheets, 
+      or any other external service UNLESS the user EXPLICITLY mentions them in their request.
+      Do not create false dependencies on external services that weren't requested.
+      
+      When creating a WhatsApp messaging widget, make sure it includes:
+      1. A table to display customer information (name, phone, email, etc.)
+      2. Functionality to add new customers
+      3. Sorting and searching capabilities for the customer table
+      4. A message template editor with variables like {{name}}, {{product}}, etc.
+      5. Options to send messages manually or automatically
+      6. Status indicators for message delivery
+      7. All functionality should work with local mock data
+      
       Example component structure:
       \`\`\`jsx
       export default function Widget() {

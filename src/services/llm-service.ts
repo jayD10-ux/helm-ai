@@ -89,7 +89,19 @@ export const getWidgetById = async (id: string): Promise<WidgetData> => {
 };
 
 export const detectWidgetCreationIntent = (message: string): boolean => {
-  // Simple regex to detect widget creation intent
-  const createWidgetRegex = /create\s+a\s+widget\s+.*/i;
-  return createWidgetRegex.test(message);
+  // Improved regex to better detect widget creation intent
+  const widgetKeywords = [
+    'create a widget',
+    'build a widget',
+    'make a widget',
+    'generate a widget',
+    'design a widget',
+    'develop a widget',
+    'new widget',
+    'widget that',
+    'widget to'
+  ];
+  
+  const lowerMessage = message.toLowerCase();
+  return widgetKeywords.some(keyword => lowerMessage.includes(keyword));
 };

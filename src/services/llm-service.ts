@@ -12,12 +12,9 @@ interface WidgetData {
   type: string;
   config: Record<string, any>;
   mcp_connections?: any[];
-}
-
-interface LLMResponse {
-  type: string;
-  message: string;
-  widget?: WidgetData;
+  code?: string;
+  sandboxId?: string;
+  previewUrl?: string;
 }
 
 export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse> => {
@@ -49,9 +46,12 @@ export const createWidget = async (widgetData: WidgetData): Promise<string> => {
   try {
     console.log('Creating widget:', widgetData);
     
+    // Create a new object without the code property to save to the database
+    const { code, ...widgetDataForDb } = widgetData;
+    
     const { data, error } = await supabase
       .from('widgets')
-      .insert([widgetData])
+      .insert([widgetDataForDb])
       .select();
 
     if (error) {

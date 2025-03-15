@@ -13,8 +13,6 @@ interface WidgetData {
   config: Record<string, any>;
   mcp_connections?: any[];
   code?: string;
-  sandboxId?: string;
-  previewUrl?: string;
 }
 
 interface LLMResponse {

@@ -10,6 +10,7 @@ import { ChatHeader } from "./ChatHeader";
 import { ChatFooter } from "./ChatFooter";
 import { ChatHistory } from "./ChatHistory";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 
 interface Message {
   id: string;
@@ -23,6 +24,9 @@ interface WidgetData {
   description: string;
   type: string;
   config: Record<string, any>;
+  code?: string;
+  sandboxId?: string;
+  previewUrl?: string;
 }
 
 interface MCPData {
@@ -64,11 +68,9 @@ const ChatInterface = () => {
     scrollToBottom();
   }, [messages]);
   
-  // Load chat history from Supabase
   useEffect(() => {
     const loadInitialChat = async () => {
       try {
-        // Get all chats for history
         const { data: allChats, error: historyError } = await supabase
           .from('chats')
           .select('*')
@@ -80,7 +82,6 @@ const ChatInterface = () => {
           setChatHistory(allChats);
         }
         
-        // Get the most recent chat
         const { data: chats, error: chatError } = await supabase
           .from('chats')
           .select('*')
@@ -89,7 +90,6 @@ const ChatInterface = () => {
           
         if (chatError) throw chatError;
         
-        // If there's an existing chat, load its messages
         if (chats && chats.length > 0) {
           const recentChatId = chats[0].id;
           setChatId(recentChatId);
@@ -109,7 +109,6 @@ const ChatInterface = () => {
             })));
           }
         } else {
-          // Create a new chat
           createNewChat();
         }
       } catch (error) {
@@ -128,7 +127,6 @@ const ChatInterface = () => {
   const createNewChat = async () => {
     try {
       setLoading(true);
-      // Create a new chat in the database
       const { data, error } = await supabase
         .from('chats')
         .insert([{ title: 'New Conversation' }])
@@ -139,7 +137,6 @@ const ChatInterface = () => {
       if (data && data.length > 0) {
         setChatId(data[0].id);
         
-        // Add welcome message to the new chat
         const welcomeMessage = {
           id: "1",
           content: "Hello! I'm Helm AI, your assistant for working with AI models and MCPs (Model Context Protocols). How can I help you today?",
@@ -159,7 +156,6 @@ const ChatInterface = () => {
           timestamp: welcomeMessage.timestamp
         }]);
         
-        // Update chat history
         setChatHistory(prev => [data[0], ...prev]);
         
         toast({
@@ -201,7 +197,6 @@ const ChatInterface = () => {
         setMessages([]);
       }
       
-      // Close history sidebar
       setHistoryOpen(false);
     } catch (error) {
       console.error('Error loading chat:', error);
@@ -330,12 +325,13 @@ const ChatInterface = () => {
           title: "Widget Created!",
           description: `"${response.data.widget.name}" has been added to your widgets.`,
           action: (
-            <div 
-              className="cursor-pointer px-2 py-1 text-xs rounded-md bg-neutral-800 hover:bg-neutral-700"
+            <Button 
+              variant="outline"
+              className="px-2 py-1 text-xs"
               onClick={() => navigate('/widgets')}
             >
               View Widgets
-            </div>
+            </Button>
           )
         });
       } else {

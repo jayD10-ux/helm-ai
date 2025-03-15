@@ -1,11 +1,12 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Plus, Component, MoreHorizontal, Trash2, Edit, Sparkles } from "lucide-react";
+import { Plus, Component, MoreHorizontal, Trash2, Edit, Sparkles, Code, ExternalLink, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { fadeIn } from "@/components/ui/motion";
 import { supabase } from "@/lib/supabase";
@@ -18,6 +19,9 @@ interface Widget {
   description: string;
   type: string;
   config: Record<string, any>;
+  code?: string;
+  sandboxId?: string;
+  previewUrl?: string;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +30,7 @@ const WidgetsGrid = () => {
   const { toast } = useToast();
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState<Record<string, "preview" | "code">>({});
   
   useEffect(() => {
     loadWidgets();
@@ -41,6 +46,13 @@ const WidgetsGrid = () => {
         
       if (error) throw error;
       
+      // Initialize all widgets to preview view by default
+      const initialViews: Record<string, "preview" | "code"> = {};
+      (data || []).forEach(widget => {
+        initialViews[widget.id] = "preview";
+      });
+      
+      setActiveView(initialViews);
       setWidgets(data || []);
     } catch (error) {
       console.error('Error loading widgets:', error);
@@ -84,6 +96,55 @@ const WidgetsGrid = () => {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return formatDistanceToNow(date, { addSuffix: true });
+  };
+  
+  const toggleWidgetView = (widgetId: string) => {
+    setActiveView(prev => ({
+      ...prev,
+      [widgetId]: prev[widgetId] === "preview" ? "code" : "preview"
+    }));
+  };
+  
+  const openExternalSandbox = (url?: string) => {
+    if (url) {
+      window.open(url, '_blank');
+    }
+  };
+  
+  const renderWidgetContent = (widget: Widget) => {
+    const view = activeView[widget.id] || "preview";
+    
+    if (view === "preview") {
+      if (widget.previewUrl) {
+        return (
+          <div className="w-full mt-4 rounded-md overflow-hidden border border-border" style={{ height: "300px" }}>
+            <iframe 
+              src={widget.previewUrl} 
+              title={widget.name}
+              className="w-full h-full"
+              sandbox="allow-scripts allow-same-origin"
+            />
+          </div>
+        );
+      } else {
+        return (
+          <div className="w-full mt-4 h-48 rounded-md bg-muted/30 flex items-center justify-center">
+            <div className="text-center">
+              <Component className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">No preview available</p>
+            </div>
+          </div>
+        );
+      }
+    } else {
+      return (
+        <div className="w-full mt-4">
+          <pre className="text-xs p-4 bg-muted/30 rounded-md overflow-auto max-h-[300px] whitespace-pre-wrap">
+            <code>{widget.code || "// No code available"}</code>
+          </pre>
+        </div>
+      );
+    }
   };
   
   const renderWidgets = () => {
@@ -144,10 +205,25 @@ const WidgetsGrid = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => {}}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit
+                <DropdownMenuItem onClick={() => toggleWidgetView(widget.id)}>
+                  {activeView[widget.id] === "preview" ? (
+                    <>
+                      <Code className="h-4 w-4 mr-2" />
+                      View Code
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Preview
+                    </>
+                  )}
                 </DropdownMenuItem>
+                {widget.previewUrl && (
+                  <DropdownMenuItem onClick={() => openExternalSandbox(widget.previewUrl)}>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open in CodeSandbox
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem 
                   onClick={() => deleteWidget(widget.id)}
                   className="text-destructive focus:text-destructive"
@@ -158,13 +234,31 @@ const WidgetsGrid = () => {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
+          
+          {renderWidgetContent(widget)}
+          
           <div className="mt-4 pt-4 border-t border-border">
             <div className="flex justify-between items-center">
               <span className="text-xs text-muted-foreground">
                 Created: {formatDate(widget.created_at)}
               </span>
-              <Button variant="outline" size="sm" className="text-xs">
-                Open
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs"
+                onClick={() => toggleWidgetView(widget.id)}
+              >
+                {activeView[widget.id] === "preview" ? (
+                  <>
+                    <Code className="h-3 w-3 mr-1" />
+                    Code
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-3 w-3 mr-1" />
+                    Preview
+                  </>
+                )}
               </Button>
             </div>
           </div>

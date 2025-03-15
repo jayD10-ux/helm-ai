@@ -119,16 +119,59 @@ serve(async (req) => {
     }
     
     if (isWidgetCreationRequest) {
-      systemMessage = `You are Helm AI, specialized in creating data widgets. Today's date and time is ${currentDateTime}.
-      When asked to create a widget, respond with a JSON object that includes: 
+      systemMessage = `You are Helm AI, specialized in creating React widgets using the shadcn/ui component system and Tailwind CSS. Today's date and time is ${currentDateTime}.
+      
+      When asked to create a widget, you must respond ONLY with a JSON object that includes:
       - name: A concise name for the widget
       - description: A detailed description of what the widget does
       - type: Should be "custom" 
       - config: An object containing relevant configuration options like dataSource, refreshInterval, layout
+      - code: A complete, well-formatted React component that implements the requested widget
       
-      The config object should have sensible defaults. Common dataSources include "gmail", "slack", "weather", "stocks", etc.
-      A typical refreshInterval is 300 seconds (5 minutes).
-      Layout options include "card", "table", "chart", etc.`;
+      Your widget code must:
+      1. Be a complete React functional component that starts with "export default function Widget() {"
+      2. Use Tailwind CSS for styling
+      3. Include realistic placeholder data for demonstration
+      4. Be fully interactive (sorting, filtering, form inputs, etc.)
+      5. Not include imports for shadcn/ui components (assume they're globally available)
+      6. Use these common UI components that will be properly styled via CSS:
+         - div.card for card containers
+         - div.card-header for card headers
+         - h3.card-title for card titles
+         - p.card-description for card descriptions
+         - div.card-content for card content
+         - div.card-footer for card footers
+         - button.btn.btn-primary for primary buttons
+         - input.input for text inputs
+         
+      The config object should have sensible defaults like refreshInterval: 300 seconds (5 minutes).
+      Layout options include "card", "table", "chart", etc.
+      
+      Example component structure:
+      \`\`\`jsx
+      export default function Widget() {
+        // State and hooks
+        const [data, setData] = React.useState([...mockData]);
+        
+        // Helper functions
+        const handleFilter = () => { /* implementation */ };
+        
+        return (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Widget Title</h3>
+              <p className="card-description">Widget description</p>
+            </div>
+            <div className="card-content">
+              {/* Widget content */}
+            </div>
+            <div className="card-footer">
+              <button className="btn btn-primary">Action</button>
+            </div>
+          </div>
+        );
+      }
+      \`\`\``;
       
       // If MCP servers are connected, add widget creation capabilities
       if (mcpData && mcpData.length > 0) {
@@ -163,7 +206,7 @@ serve(async (req) => {
           }
         ],
         temperature: 0.7,
-        max_tokens: 800
+        max_tokens: 2000
       })
     });
     
@@ -190,24 +233,53 @@ serve(async (req) => {
           const widgetData = JSON.parse(jsonStr);
           
           // Validate the widget data
-          if (widgetData.name && widgetData.description) {
-            return new Response(
-              JSON.stringify({
-                type: "widget_creation",
-                widget: {
-                  name: widgetData.name,
-                  description: widgetData.description,
-                  type: widgetData.type || "custom",
-                  config: widgetData.config || {
-                    dataSource: "custom",
-                    refreshInterval: 300,
-                    layout: "card"
-                  }
+          if (widgetData.name && widgetData.description && widgetData.code) {
+            console.log("Widget code generated successfully");
+            
+            // Create sandbox in CodeSandbox
+            try {
+              const sandboxResponse = await fetch("https://nwaeufzdrvwfavohsklz.functions.supabase.co/widget-sandbox", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
                 },
-                message: `I've created a widget called "${widgetData.name}". ${widgetData.description}`
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+                body: JSON.stringify({
+                  code: widgetData.code
+                })
+              });
+              
+              if (!sandboxResponse.ok) {
+                throw new Error(`Failed to create sandbox: ${sandboxResponse.status}`);
+              }
+              
+              const sandboxData = await sandboxResponse.json();
+              console.log("Sandbox created:", JSON.stringify(sandboxData));
+              
+              // Add sandbox data to widget
+              widgetData.sandboxId = sandboxData.sandboxId;
+              widgetData.previewUrl = sandboxData.previewUrl;
+              
+              return new Response(
+                JSON.stringify({
+                  type: "widget_creation",
+                  widget: widgetData,
+                  message: `I've created a widget called "${widgetData.name}". ${widgetData.description}`
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            } catch (sandboxError) {
+              console.error("Error creating sandbox:", sandboxError);
+              
+              // Return the widget without sandbox data
+              return new Response(
+                JSON.stringify({
+                  type: "widget_creation",
+                  widget: widgetData,
+                  message: `I've created a widget called "${widgetData.name}". ${widgetData.description}`
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
           }
         }
         
@@ -227,7 +299,23 @@ serve(async (req) => {
                            purpose.includes("slack") ? "slack" : "custom",
                 refreshInterval: 300,
                 layout: "card"
-              }
+              },
+              code: `export default function Widget() {
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h3 className="card-title">${purpose.split(" ").slice(0, 3).join(" ")} Widget</h3>
+        <p className="card-description">${purpose}</p>
+      </div>
+      <div className="card-content">
+        <p>This widget was created to ${purpose}.</p>
+      </div>
+      <div className="card-footer">
+        <button className="btn btn-primary">Refresh</button>
+      </div>
+    </div>
+  );
+}`
             },
             message: `I've created a widget to ${purpose}. You can find it in your widgets dashboard.`
           }),
@@ -249,7 +337,23 @@ serve(async (req) => {
                 dataSource: "custom",
                 refreshInterval: 300,
                 layout: "card"
-              }
+              },
+              code: `export default function Widget() {
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h3 className="card-title">${purpose.split(" ").slice(0, 3).join(" ")} Widget</h3>
+        <p className="card-description">${purpose}</p>
+      </div>
+      <div className="card-content">
+        <p>This widget was created to ${purpose}.</p>
+      </div>
+      <div className="card-footer">
+        <button className="btn btn-primary">Refresh</button>
+      </div>
+    </div>
+  );
+}`
             },
             message: `I've created a widget to ${purpose}. You can find it in your widgets dashboard.`
           }),

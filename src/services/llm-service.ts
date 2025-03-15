@@ -17,6 +17,12 @@ interface WidgetData {
   previewUrl?: string;
 }
 
+interface LLMResponse {
+  type: string;
+  message: string;
+  widget?: WidgetData;
+}
+
 export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse> => {
   try {
     console.log(`Sending message to LLM: "${message.content}"`);

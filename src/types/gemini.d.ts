@@ -7,10 +7,13 @@ declare namespace gemini {
     widget?: WidgetData;
     message?: string;
     error?: string;
+    rawOutput?: boolean;
+    details?: any;
   }
 
   interface GeminiErrorResponse {
     error: string;
+    text?: string;
     details?: any;
   }
 
@@ -22,5 +25,31 @@ declare namespace gemini {
     code?: string;
     sandboxId?: string;
     previewUrl?: string;
+    mcp_connections?: any[];
+  }
+
+  interface GeminiRequestOptions {
+    contents: {
+      parts: {
+        text: string;
+      }[];
+    }[];
+    generationConfig?: {
+      temperature?: number;
+      topP?: number;
+      topK?: number;
+      maxOutputTokens?: number;
+      stopSequences?: string[];
+    };
+    safetySettings?: {
+      category: string;
+      threshold: string;
+    }[];
+  }
+
+  interface GeminiChatPayload {
+    content: string;
+    isWidgetRequest: boolean;
+    systemPrompt?: string;
   }
 }

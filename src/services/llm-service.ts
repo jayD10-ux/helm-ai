@@ -1,5 +1,6 @@
 
 import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 interface ChatMessage {
   content: string;
@@ -95,42 +96,56 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       });
       
       if (error) {
-        console.error('Error with Gemini API:', error);
-        throw error;
+        console.error('Error with Gemini API invocation:', error);
+        toast.error("Failed to connect to Gemini API");
+        throw new Error(`Supabase edge function error: ${error.message}`);
       }
       
       console.log('Gemini raw response:', geminiResponse);
       
-      if (!geminiResponse || !geminiResponse.text) {
-        throw new Error("Invalid response from Gemini API");
+      if (!geminiResponse) {
+        console.error('Empty response from Gemini API');
+        toast.error("Received empty response from Gemini API");
+        throw new Error("Empty response from Gemini API");
+      }
+      
+      if (geminiResponse.error) {
+        console.error('Gemini API returned an error:', geminiResponse.error);
+        toast.error("Gemini API error: " + geminiResponse.error);
+        throw new Error(`Gemini API error: ${geminiResponse.error}`);
+      }
+      
+      if (!geminiResponse.text) {
+        console.error('Missing text in Gemini response:', geminiResponse);
+        toast.error("Invalid response format from Gemini API");
+        throw new Error("Invalid response from Gemini API: missing text");
       }
       
       // Process the response based on whether it's a widget creation request or not
       if (isWidgetRequest) {
         try {
-          // For widget requests, try to parse the response as JSON
-          const responseText = geminiResponse.text;
-          console.log('Response text for widget creation:', responseText);
+          // For widget requests, check if we already have a parsed widget
+          if (geminiResponse.type === "widget_creation" && geminiResponse.widget) {
+            console.log('Successfully received widget response:', geminiResponse);
+            // Save the widget and return the response
+            const widgetId = await createWidget(geminiResponse.widget);
+            return geminiResponse;
+          }
           
-          // First try direct JSON parsing in case the whole response is valid JSON
-          try {
-            const parsedResponse = JSON.parse(responseText);
+          // If we have rawOutput flag, the edge function couldn't parse the JSON
+          if (geminiResponse.rawOutput) {
+            console.log('Received raw output, attempting to extract widget data');
             
-            if (parsedResponse.type === "widget_creation" && parsedResponse.widget) {
-              console.log('Successfully parsed widget response directly:', parsedResponse);
-              // Save the widget and return the response
-              const widgetId = await createWidget(parsedResponse.widget);
-              return parsedResponse;
-            }
-          } catch (directParseError) {
-            console.log('Direct JSON parse failed, trying regex extraction:', directParseError);
-            // If direct parsing fails, try to extract JSON with regex
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            // Try to extract JSON with regex (fallback)
+            const responseText = geminiResponse.text;
+            console.log('Response text for widget creation:', responseText.substring(0, 200) + '...');
+            
+            const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
             
             if (jsonMatch) {
               try {
-                const extractedJson = jsonMatch[0];
-                console.log('Extracted JSON with regex:', extractedJson);
+                const extractedJson = jsonMatch[1] || jsonMatch[0];
+                console.log('Extracted JSON with regex:', extractedJson.substring(0, 200) + '...');
                 const parsedResponse = JSON.parse(extractedJson);
                 
                 if (parsedResponse.type === "widget_creation" && parsedResponse.widget) {
@@ -145,11 +160,14 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
             }
           }
           
-          // If we couldn't parse a widget response, throw an error
+          // If we couldn't parse a widget response, inform the user
           console.error('Failed to parse widget creation response');
-          throw new Error("Failed to parse widget creation response");
+          return {
+            type: "text",
+            message: "I tried to create a widget based on your request, but encountered an error parsing the response. Please try again with more specific details."
+          };
         } catch (error) {
-          console.error("Error parsing widget response:", error);
+          console.error("Error processing widget response:", error);
           
           // If widget parsing fails, return a text response explaining the issue
           return {
@@ -185,6 +203,8 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       }
     } catch (error) {
       console.error('Error with Gemini integration:', error);
+      toast.error("Error connecting to Gemini: " + error.message);
+      
       // Return a user-friendly error message
       return {
         type: "text",
@@ -193,6 +213,7 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
     }
   } catch (error) {
     console.error('Error in LLM service:', error);
+    toast.error("Error in LLM service: " + error.message);
     
     // Provide a more helpful error message
     return {

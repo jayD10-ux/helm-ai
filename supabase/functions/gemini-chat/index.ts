@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,11 +73,25 @@ serve(async (req) => {
       );
     }
 
+    // Get the current date for context
+    const now = new Date();
+    const currentDate = now.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
     let effectiveSystemPrompt = systemPrompt || "";
+    
+    // Add current date context to all prompts
+    effectiveSystemPrompt = `Today is ${currentDate}. ${effectiveSystemPrompt}`;
     
     // If this is a widget creation request, use a specialized system prompt
     if (isWidgetRequest) {
       effectiveSystemPrompt = `
+Today is ${currentDate}.
+
 ### Objective:
 You are an advanced AI that generates fully functional UI widgets based on user requests. These widgets should:
 1. Be built using **React + shadcn/ui**.
@@ -94,11 +108,12 @@ Provide your response in this exact JSON format:
     "name": "Widget Name",
     "description": "Brief description of widget functionality",
     "type": "dashboard",
-    "config": {},
-    "code": "export default function Widget() {\\n// Complete React component code here\\n}"
+    "config": {}
   },
   "message": "Explanation of what you've created"
 }
+
+DO NOT include a 'code' field in the widget object. The code will be provided separately.
 `;
     }
 
@@ -125,11 +140,13 @@ Provide your response in this exact JSON format:
       console.log("Request to Gemini:", JSON.stringify(requestBodyForGemini));
     }
     
-    // Make the request to Gemini API
-    // Changed to use Authorization header instead of query parameter
+    // Make the request to Gemini API with correct authentication
     let response;
     try {
-      response = await fetch(GEMINI_API_URL, {
+      // Include the API key in the headers
+      const apiUrl = new URL(GEMINI_API_URL);
+      
+      response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -139,6 +156,24 @@ Provide your response in this exact JSON format:
       });
       
       console.log("Gemini API response status:", response.status);
+      
+      // If we got an unauthorized response, try alternative auth method
+      if (response.status === 401) {
+        console.log("401 Unauthorized - Trying alternative authentication method");
+        
+        // Try with the key as a query parameter instead
+        apiUrl.searchParams.append('key', GEMINI_API_KEY);
+        
+        response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestBodyForGemini)
+        });
+        
+        console.log("Gemini API retry response status:", response.status);
+      }
     } catch (fetchError) {
       console.error("Network error when calling Gemini API:", fetchError);
       return new Response(
@@ -276,15 +311,35 @@ Provide your response in this exact JSON format:
           const finalWidgetData = widgetData.widget || widgetData;
           console.log("Successfully processed widget data");
           
-          return new Response(
-            JSON.stringify({
-              text: widgetData.message || "Widget created successfully",
-              type: "widget_creation",
-              widget: finalWidgetData,
-              message: widgetData.message || "Here's your widget!"
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          // Remove the code property if it exists (since the database doesn't have this column)
+          if (finalWidgetData.code) {
+            console.log("Removing code property from widget data for database compatibility");
+            const { code, ...widgetDataWithoutCode } = finalWidgetData;
+            
+            return new Response(
+              JSON.stringify({
+                text: widgetData.message || "Widget created successfully",
+                type: "widget_creation",
+                widget: {
+                  ...widgetDataWithoutCode,
+                  // Store code separately if needed
+                  code: code
+                },
+                message: widgetData.message || "Here's your widget!"
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          } else {
+            return new Response(
+              JSON.stringify({
+                text: widgetData.message || "Widget created successfully",
+                type: "widget_creation",
+                widget: finalWidgetData,
+                message: widgetData.message || "Here's your widget!"
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
         } else {
           // If JSON parsing fails, return the raw text
           console.log("Could not parse widget JSON, returning raw text");

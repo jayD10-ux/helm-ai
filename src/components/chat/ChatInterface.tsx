@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useMCPServers } from "@/hooks/use-mcp-servers";
 import { supabase } from "@/lib/supabase";
 import { fetchMCPCapabilities } from "@/services/composio";
-import { sendChatMessage, createWidget } from "@/services/llm-service";
+import { sendChatMessage } from "@/services/llm-service";
 import { ChatList } from "./ChatList";
 import { ChatInput } from "./ChatInput";
 import { ChatHeader } from "./ChatHeader";
@@ -213,9 +213,11 @@ const ChatInterface = () => {
 
   const saveWidgetToDatabase = async (widgetData: WidgetData) => {
     try {
+      const { code, ...widgetDataForDb } = widgetData;
+      
       const { data, error } = await supabase
         .from('widgets')
-        .insert([widgetData])
+        .insert([widgetDataForDb])
         .select();
 
       if (error) {
@@ -299,7 +301,9 @@ const ChatInterface = () => {
       console.log('LLM response:', response);
       
       if (response.type === "widget_creation" && response.widget) {
-        const widgetId = await saveWidgetToDatabase(response.widget);
+        const { code, ...widgetForDb } = response.widget;
+        
+        const widgetId = await saveWidgetToDatabase(widgetForDb);
         
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),

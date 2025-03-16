@@ -1,4 +1,3 @@
-
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -24,26 +23,15 @@ interface LLMResponse {
 
 export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse> => {
   try {
-    console.log(`Sending message to Gemini 2.0 Flash: "${message.content}"`);
+    console.log(`Sending message to Gemini: "${message.content}"`);
     
     // Check if this is a widget creation request
     const isWidgetRequest = detectWidgetCreationIntent(message.content);
     
     // Create appropriate system prompt based on the request type
-    let systemPrompt = "You are a helpful AI assistant called Helm AI. You provide concise, accurate information.";
+    let systemPrompt = "You are a helpful AI assistant called Helm AI. You provide concise, accurate information. Always include the current date in your responses when asked about time-sensitive information.";
     
     if (isWidgetRequest) {
-      const now = new Date();
-      const currentDateTime = now.toLocaleString('en-US', { 
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZoneName: 'short'
-      });
-      
       systemPrompt = `You are an advanced AI that generates fully functional UI widgets based on user requests. 
       These widgets should:
       1. Be built using React + shadcn/ui.
@@ -51,17 +39,8 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       3. If an API call is required, assume it will use an Express.js backend (/api/get-data, /api/send-data).
       4. Be self-contained and ready for execution in a sandbox environment.
       5. Follow best practices for clean, modular code.
-      6. Always start the component with "export default function Widget() {".
-      7. DO NOT include imports for shadcn/ui components (assume they're globally available).
-      8. Use standard HTML elements with Tailwind CSS classes for styling.
-      9. Include realistic placeholder data for demonstration.
-      10. Handle all core functionality with built-in React hooks.
       
-      Today's date is ${currentDateTime}.
-      
-      CRITICAL: NEVER suggest or mention external APIs, services, or tools like Notion, Google Sheets, 
-      or any other external service UNLESS the user EXPLICITLY mentions them in their request.
-      Do not create false dependencies on external services that weren't requested.
+      CRITICAL: NEVER suggest or mention external APIs, services, or tools unless the user EXPLICITLY mentions them.
       
       When creating a widget, respond with ONLY a JSON object in this exact format:
       {
@@ -74,13 +53,13 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
             "dataSource": "custom",
             "refreshInterval": 300,
             "layout": "card"
-          },
-          "code": "// React component code here"
+          }
         },
         "message": "I've created a widget called Widget Name. This widget does X. You can view it in the Widgets page."
       }
 
-      DO NOT include any explanations, markdown formatting, or any text outside of this JSON structure. The entire response must be valid JSON.`;
+      DO NOT include a 'code' field in the widget object as it will be added separately.
+      DO NOT include any explanations, markdown formatting, or any text outside of this JSON structure.`;
     }
     
     // Check if debug mode is enabled from user settings
@@ -104,7 +83,7 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
     try {
       console.log("Calling Gemini API via Supabase Edge Function");
       
-      // Call Gemini 2.0 Flash via Supabase Edge Function
+      // Call Gemini via Supabase Edge Function
       const { data: geminiResponse, error } = await supabase.functions.invoke("gemini-chat", {
         body: {
           content: message.content,
@@ -149,9 +128,22 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
           // For widget requests, check if we already have a parsed widget
           if (geminiResponse.type === "widget_creation" && geminiResponse.widget) {
             console.log('Successfully received widget response:', geminiResponse);
-            // Save the widget and return the response
-            const widgetId = await createWidget(geminiResponse.widget);
-            return geminiResponse;
+            
+            // Extract code if present, but don't save it to the database
+            const { code, ...widgetDataForDb } = geminiResponse.widget;
+            
+            // Save the widget without the code property
+            const widgetId = await createWidget(widgetDataForDb);
+            
+            // Return the full response including code for frontend use
+            return {
+              type: "widget_creation",
+              message: geminiResponse.message || "Widget created successfully!",
+              widget: {
+                ...widgetDataForDb,
+                code: code
+              }
+            };
           }
           
           // If we have rawOutput flag, the edge function couldn't parse the JSON
@@ -172,9 +164,22 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
                 
                 if (parsedResponse.type === "widget_creation" && parsedResponse.widget) {
                   console.log('Successfully parsed widget response with regex extraction:', parsedResponse);
-                  // Save the widget and return the response
-                  const widgetId = await createWidget(parsedResponse.widget);
-                  return parsedResponse;
+                  
+                  // Extract code if present, but don't save it to the database
+                  const { code, ...widgetDataForDb } = parsedResponse.widget;
+                  
+                  // Save the widget without the code property
+                  const widgetId = await createWidget(widgetDataForDb);
+                  
+                  // Return the full response including code for frontend use
+                  return {
+                    type: "widget_creation",
+                    message: parsedResponse.message || "Widget created successfully!",
+                    widget: {
+                      ...widgetDataForDb,
+                      code: code
+                    }
+                  };
                 }
               } catch (regexParseError) {
                 console.error('Regex JSON parsing failed:', regexParseError);
@@ -186,7 +191,7 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
           console.error('Failed to parse widget creation response');
           return {
             type: "text",
-            message: "I tried to create a widget based on your request, but encountered an error parsing the response. Please try again with more specific details."
+            message: "I tried to create a widget based on your request, but encountered an error. Please try again with more specific details."
           };
         } catch (error) {
           console.error("Error processing widget response:", error);
@@ -194,7 +199,7 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
           // If widget parsing fails, return a text response explaining the issue
           return {
             type: "text",
-            message: "I tried to create a widget based on your request, but encountered an error. Please try again with more specific details about what kind of widget you'd like."
+            message: "I tried to create a widget based on your request, but encountered an error. Please try again with more specific details."
           };
         }
       } else {
@@ -249,7 +254,7 @@ export const createWidget = async (widgetData: WidgetData): Promise<string> => {
   try {
     console.log('Creating widget:', widgetData);
     
-    // Create a new object without the code property to save to the database
+    // Ensure we don't try to save the code property to the database
     const { code, ...widgetDataForDb } = widgetData;
     
     const { data, error } = await supabase

@@ -23,7 +23,7 @@ interface LLMResponse {
 
 export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse> => {
   try {
-    console.log(`Sending message to Claude 3.5 Sonnet via Puter.js: "${message.content}"`);
+    console.log(`Sending message to Gemini 2.0 Flash: "${message.content}"`);
     
     // Check if this is a widget creation request
     const isWidgetRequest = detectWidgetCreationIntent(message.content);
@@ -83,32 +83,33 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
     }
     
     try {
-      // Call Claude 3.5 Sonnet via Puter.js with streaming disabled
-      console.log("About to call puter.ai.chat with options:", {
-        model: 'claude-3-5-sonnet',
-        systemPrompt: isWidgetRequest ? "Creating widget..." : "Answering question...",
-        stream: false
+      console.log("Calling Gemini API via Supabase Edge Function");
+      
+      // Call Gemini 2.0 Flash via Supabase Edge Function
+      const { data: geminiResponse, error } = await supabase.functions.invoke("gemini-chat", {
+        body: {
+          content: message.content,
+          isWidgetRequest,
+          systemPrompt
+        }
       });
       
-      // Check if puter is defined
-      if (typeof puter === 'undefined') {
-        console.error('Puter.js is not loaded. Check the script in index.html');
-        throw new Error('Puter.js is not loaded');
+      if (error) {
+        console.error('Error with Gemini API:', error);
+        throw error;
       }
       
-      const response = await puter.ai.chat(message.content, {
-        model: 'claude-3-5-sonnet',
-        systemPrompt: systemPrompt,
-        stream: false // Explicitly disable streaming
-      }) as puter.ai.ChatResponse; // Use type assertion to handle the return type
+      console.log('Gemini raw response:', geminiResponse);
       
-      console.log('Claude 3.5 raw response:', response);
+      if (!geminiResponse || !geminiResponse.text) {
+        throw new Error("Invalid response from Gemini API");
+      }
       
       // Process the response based on whether it's a widget creation request or not
       if (isWidgetRequest) {
         try {
           // For widget requests, try to parse the response as JSON
-          const responseText = response.message.content[0].text;
+          const responseText = geminiResponse.text;
           console.log('Response text for widget creation:', responseText);
           
           // First try direct JSON parsing in case the whole response is valid JSON
@@ -157,8 +158,8 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
           };
         }
       } else {
-        // For regular chat, extract the text response
-        const responseText = response.message.content[0].text;
+        // For regular chat, just return the text response
+        const responseText = geminiResponse.text;
         
         // Save the conversation to chat history if we have a chat ID
         if (message.chatId) {
@@ -183,11 +184,11 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
         };
       }
     } catch (error) {
-      console.error('Error with Puter.js Claude integration:', error);
+      console.error('Error with Gemini integration:', error);
       // Return a user-friendly error message
       return {
         type: "text",
-        message: "I'm having trouble connecting to Claude right now. Please try again in a moment."
+        message: "I'm having trouble connecting to Gemini right now. Please try again in a moment."
       };
     }
   } catch (error) {

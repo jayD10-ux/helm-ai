@@ -31,9 +31,8 @@ const ApiSettings = ({
             onChange={(e) => setModelType(e.target.value)}
             className="w-full bg-card border border-border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Default)</option>
-            <option value="claude-3-opus">Claude 3 Opus</option>
-            <option value="claude-3-haiku">Claude 3 Haiku</option>
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash (Default)</option>
+            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
           </select>
           <p className="text-sm text-muted-foreground">
             Select the AI model to use for Helm AI
@@ -42,19 +41,19 @@ const ApiSettings = ({
         
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
-            <Label htmlFor="usePuter">Use Puter.js for Claude API</Label>
+            <Label htmlFor="useEdgeFunction">Use Supabase Edge Function</Label>
             <p className="text-sm text-muted-foreground">
-              Puter.js provides free access to Claude models without API keys
+              Securely connect to Gemini API through Supabase Edge Functions
             </p>
           </div>
-          <Switch id="usePuter" checked={true} disabled />
+          <Switch id="useEdgeFunction" checked={true} disabled />
         </div>
         
         <div className="rounded-md bg-muted p-4">
-          <div className="text-sm font-medium">About Puter.js</div>
+          <div className="text-sm font-medium">About Gemini Integration</div>
           <p className="text-sm text-muted-foreground mt-2">
-            Helm AI now uses Puter.js to access Claude 3.5 Sonnet without API keys or usage limits.
-            This "User Pays" model allows you to use advanced AI capabilities without any subscription costs.
+            Helm AI now uses Google's Gemini 2.0 Flash for all AI capabilities. This model offers excellent
+            code generation capabilities with high performance and lower costs compared to other models.
           </p>
         </div>
       </CardContent>

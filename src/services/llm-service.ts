@@ -82,90 +82,104 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       ONLY INCLUDE THE REACT COMPONENT CODE IN THE 'code' FIELD. DO NOT INCLUDE ANY EXPLANATIONS OR MARKDOWN FORMATTING IN THE CODE.`;
     }
     
-    // Call Claude 3.5 Sonnet via Puter.js with streaming disabled
-    const response = await puter.ai.chat(message.content, {
-      model: 'claude-3-5-sonnet',
-      systemPrompt: systemPrompt,
-      stream: false // Explicitly disable streaming
-    }) as puter.ai.ChatResponse; // Use type assertion to handle the return type
-    
-    console.log('Claude 3.5 response:', response);
-    
-    // Process the response based on whether it's a widget creation request or not
-    if (isWidgetRequest) {
-      try {
-        // For widget requests, try to parse the response as JSON
+    try {
+      // Call Claude 3.5 Sonnet via Puter.js with streaming disabled
+      const response = await puter.ai.chat(message.content, {
+        model: 'claude-3-5-sonnet',
+        systemPrompt: systemPrompt,
+        stream: false // Explicitly disable streaming
+      }) as puter.ai.ChatResponse; // Use type assertion to handle the return type
+      
+      console.log('Claude 3.5 response:', response);
+      
+      // Process the response based on whether it's a widget creation request or not
+      if (isWidgetRequest) {
+        try {
+          // For widget requests, try to parse the response as JSON
+          const responseText = response.message.content[0].text;
+          
+          // Look for JSON structure in the response
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          
+          if (jsonMatch) {
+            const parsedResponse = JSON.parse(jsonMatch[0]);
+            
+            if (parsedResponse.type === "widget_creation" && parsedResponse.widget) {
+              // If it's a valid widget creation response, save it
+              if (message.chatId) {
+                // Save this interaction to chat history
+                await supabase.from('messages').insert([{
+                  content: message.content,
+                  sender: 'user',
+                  chat_id: message.chatId,
+                  timestamp: new Date()
+                }]);
+                
+                await supabase.from('messages').insert([{
+                  content: parsedResponse.message,
+                  sender: 'ai',
+                  chat_id: message.chatId,
+                  timestamp: new Date()
+                }]);
+              }
+              
+              return parsedResponse;
+            }
+          }
+          
+          // If we couldn't parse a widget response, fall through to the default handling
+          throw new Error("Failed to parse widget creation response");
+        } catch (error) {
+          console.error("Error parsing widget response:", error);
+          
+          // If widget parsing fails, return a text response explaining the issue
+          return {
+            type: "text",
+            message: "I tried to create a widget based on your request, but encountered an error. Please try again with more specific details about what kind of widget you'd like."
+          };
+        }
+      } else {
+        // For regular chat, extract the text response
         const responseText = response.message.content[0].text;
         
-        // Look for JSON structure in the response
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-          const parsedResponse = JSON.parse(jsonMatch[0]);
+        // Save the conversation to chat history if we have a chat ID
+        if (message.chatId) {
+          await supabase.from('messages').insert([{
+            content: message.content,
+            sender: 'user',
+            chat_id: message.chatId,
+            timestamp: new Date()
+          }]);
           
-          if (parsedResponse.type === "widget_creation" && parsedResponse.widget) {
-            // If it's a valid widget creation response, save it
-            if (message.chatId) {
-              // Save this interaction to chat history
-              await supabase.from('messages').insert([{
-                content: message.content,
-                sender: 'user',
-                chat_id: message.chatId,
-                timestamp: new Date()
-              }]);
-              
-              await supabase.from('messages').insert([{
-                content: parsedResponse.message,
-                sender: 'ai',
-                chat_id: message.chatId,
-                timestamp: new Date()
-              }]);
-            }
-            
-            return parsedResponse;
-          }
+          await supabase.from('messages').insert([{
+            content: responseText,
+            sender: 'ai',
+            chat_id: message.chatId,
+            timestamp: new Date()
+          }]);
         }
         
-        // If we couldn't parse a widget response, fall through to the default handling
-        throw new Error("Failed to parse widget creation response");
-      } catch (error) {
-        console.error("Error parsing widget response:", error);
-        
-        // If widget parsing fails, return a text response explaining the issue
         return {
           type: "text",
-          message: "I tried to create a widget based on your request, but encountered an error. Please try again with more specific details about what kind of widget you'd like."
+          message: responseText
         };
       }
-    } else {
-      // For regular chat, extract the text response
-      const responseText = response.message.content[0].text;
-      
-      // Save the conversation to chat history if we have a chat ID
-      if (message.chatId) {
-        await supabase.from('messages').insert([{
-          content: message.content,
-          sender: 'user',
-          chat_id: message.chatId,
-          timestamp: new Date()
-        }]);
-        
-        await supabase.from('messages').insert([{
-          content: responseText,
-          sender: 'ai',
-          chat_id: message.chatId,
-          timestamp: new Date()
-        }]);
-      }
-      
+    } catch (error) {
+      console.error('Error with Puter.js Claude integration:', error);
+      // Return a user-friendly error message
       return {
         type: "text",
-        message: responseText
+        message: "I'm having trouble connecting to Claude right now. Please try again in a moment."
       };
     }
   } catch (error) {
     console.error('Error in LLM service:', error);
-    throw error;
+    
+    // Provide a more helpful error message
+    return {
+      type: "text",
+      message: "I encountered an error while processing your request. Please try again."
+    };
   }
 };
 

@@ -6,13 +6,18 @@ import { Button } from "@/components/ui/button";
 import { executeCode } from "@/services/e2b-service";
 import { cn } from "@/lib/utils";
 
-interface ChatMessageProps {
-  sender: "user" | "ai";
+interface Message {
+  id: string;
   content: string;
+  sender: "user" | "ai";
   timestamp: Date;
 }
 
-export function ChatMessage({ sender, content, timestamp }: ChatMessageProps) {
+interface ChatMessageProps {
+  message: Message;
+}
+
+export function ChatMessage({ message }: ChatMessageProps) {
   const [codeOutput, setCodeOutput] = useState<Record<string, { output: string; isError: boolean; isRunning: boolean }>>({});
   
   const detectLanguage = (lang: string): string => {
@@ -73,9 +78,9 @@ export function ChatMessage({ sender, content, timestamp }: ChatMessageProps) {
   let codeBlockIndex = 0;
   
   return (
-    <div className={`flex items-start gap-3 p-4 ${sender === "ai" ? "bg-neutral-900/10" : ""}`}>
+    <div className={`flex items-start gap-3 p-4 ${message.sender === "ai" ? "bg-neutral-900/10" : ""}`}>
       <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border bg-primary text-primary-foreground">
-        {sender === "user" ? (
+        {message.sender === "user" ? (
           <User className="h-4 w-4" />
         ) : (
           <Bot className="h-4 w-4" />
@@ -83,17 +88,17 @@ export function ChatMessage({ sender, content, timestamp }: ChatMessageProps) {
       </div>
       <div className="flex flex-col gap-2 min-w-0">
         <div className="flex items-center gap-2">
-          <div className="font-semibold">{sender === "user" ? "You" : "Helm AI"}</div>
+          <div className="font-semibold">{message.sender === "user" ? "You" : "Helm AI"}</div>
           <div className="text-xs text-muted-foreground">
-            {timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </div>
         </div>
         <div className="prose prose-neutral dark:prose-invert">
           <ReactMarkdown
             components={{
-              code: ({ node, className, children, ...props }) => {
+              code: ({ className, children, ...props }) => {
                 const language = className ? className.replace("language-", "") : "";
-                const isCodeBlock = props.inline === undefined;
+                const isCodeBlock = className && !props.inline;
                 const code = String(children).replace(/\n$/, "");
                 
                 if (!isCodeBlock) {
@@ -176,7 +181,7 @@ export function ChatMessage({ sender, content, timestamp }: ChatMessageProps) {
               }
             }}
           >
-            {content}
+            {message.content}
           </ReactMarkdown>
         </div>
       </div>

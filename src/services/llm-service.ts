@@ -62,7 +62,7 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       or any other external service UNLESS the user EXPLICITLY mentions them in their request.
       Do not create false dependencies on external services that weren't requested.
       
-      When creating a widget, respond with a JSON object in this exact format:
+      When creating a widget, respond with ONLY a JSON object in this exact format:
       {
         "type": "widget_creation",
         "widget": {
@@ -79,55 +79,73 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
         "message": "I've created a widget called Widget Name. This widget does X. You can view it in the Widgets page."
       }
 
-      ONLY INCLUDE THE REACT COMPONENT CODE IN THE 'code' FIELD. DO NOT INCLUDE ANY EXPLANATIONS OR MARKDOWN FORMATTING IN THE CODE.`;
+      DO NOT include any explanations, markdown formatting, or any text outside of this JSON structure. The entire response must be valid JSON.`;
     }
     
     try {
       // Call Claude 3.5 Sonnet via Puter.js with streaming disabled
+      console.log("About to call puter.ai.chat with options:", {
+        model: 'claude-3-5-sonnet',
+        systemPrompt: isWidgetRequest ? "Creating widget..." : "Answering question...",
+        stream: false
+      });
+      
+      // Check if puter is defined
+      if (typeof puter === 'undefined') {
+        console.error('Puter.js is not loaded. Check the script in index.html');
+        throw new Error('Puter.js is not loaded');
+      }
+      
       const response = await puter.ai.chat(message.content, {
         model: 'claude-3-5-sonnet',
         systemPrompt: systemPrompt,
         stream: false // Explicitly disable streaming
       }) as puter.ai.ChatResponse; // Use type assertion to handle the return type
       
-      console.log('Claude 3.5 response:', response);
+      console.log('Claude 3.5 raw response:', response);
       
       // Process the response based on whether it's a widget creation request or not
       if (isWidgetRequest) {
         try {
           // For widget requests, try to parse the response as JSON
           const responseText = response.message.content[0].text;
+          console.log('Response text for widget creation:', responseText);
           
-          // Look for JSON structure in the response
-          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-          
-          if (jsonMatch) {
-            const parsedResponse = JSON.parse(jsonMatch[0]);
+          // First try direct JSON parsing in case the whole response is valid JSON
+          try {
+            const parsedResponse = JSON.parse(responseText);
             
             if (parsedResponse.type === "widget_creation" && parsedResponse.widget) {
-              // If it's a valid widget creation response, save it
-              if (message.chatId) {
-                // Save this interaction to chat history
-                await supabase.from('messages').insert([{
-                  content: message.content,
-                  sender: 'user',
-                  chat_id: message.chatId,
-                  timestamp: new Date()
-                }]);
-                
-                await supabase.from('messages').insert([{
-                  content: parsedResponse.message,
-                  sender: 'ai',
-                  chat_id: message.chatId,
-                  timestamp: new Date()
-                }]);
-              }
-              
+              console.log('Successfully parsed widget response directly:', parsedResponse);
+              // Save the widget and return the response
+              const widgetId = await createWidget(parsedResponse.widget);
               return parsedResponse;
+            }
+          } catch (directParseError) {
+            console.log('Direct JSON parse failed, trying regex extraction:', directParseError);
+            // If direct parsing fails, try to extract JSON with regex
+            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+            
+            if (jsonMatch) {
+              try {
+                const extractedJson = jsonMatch[0];
+                console.log('Extracted JSON with regex:', extractedJson);
+                const parsedResponse = JSON.parse(extractedJson);
+                
+                if (parsedResponse.type === "widget_creation" && parsedResponse.widget) {
+                  console.log('Successfully parsed widget response with regex extraction:', parsedResponse);
+                  // Save the widget and return the response
+                  const widgetId = await createWidget(parsedResponse.widget);
+                  return parsedResponse;
+                }
+              } catch (regexParseError) {
+                console.error('Regex JSON parsing failed:', regexParseError);
+              }
             }
           }
           
-          // If we couldn't parse a widget response, fall through to the default handling
+          // If we couldn't parse a widget response, throw an error
+          console.error('Failed to parse widget creation response');
           throw new Error("Failed to parse widget creation response");
         } catch (error) {
           console.error("Error parsing widget response:", error);

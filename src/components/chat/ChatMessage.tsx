@@ -96,9 +96,11 @@ export function ChatMessage({ message }: ChatMessageProps) {
         <div className="prose prose-neutral dark:prose-invert">
           <ReactMarkdown
             components={{
-              code: ({ inline, className, children, ...props }) => {
+              code: ({ className, children, ...props }) => {
                 const language = className ? className.replace("language-", "") : "";
-                const isCodeBlock = !inline && className;
+                // In ReactMarkdown v10, we can determine if it's a code block by checking
+                // if the className exists (it's added by the markdown parser for fenced code blocks)
+                const isCodeBlock = !!className;
                 const code = String(children).replace(/\n$/, "");
                 
                 if (!isCodeBlock) {

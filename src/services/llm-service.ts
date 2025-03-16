@@ -82,11 +82,12 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       ONLY INCLUDE THE REACT COMPONENT CODE IN THE 'code' FIELD. DO NOT INCLUDE ANY EXPLANATIONS OR MARKDOWN FORMATTING IN THE CODE.`;
     }
     
-    // Call Claude 3.5 Sonnet via Puter.js
+    // Call Claude 3.5 Sonnet via Puter.js with streaming disabled
     const response = await puter.ai.chat(message.content, {
       model: 'claude-3-5-sonnet',
-      systemPrompt: systemPrompt
-    });
+      systemPrompt: systemPrompt,
+      stream: false // Explicitly disable streaming
+    }) as puter.ai.ChatResponse; // Use type assertion to handle the return type
     
     console.log('Claude 3.5 response:', response);
     

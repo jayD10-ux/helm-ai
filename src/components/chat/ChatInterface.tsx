@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useMCPServers } from "@/hooks/use-mcp-servers";
 import { supabase } from "@/lib/supabase";
 import { fetchMCPCapabilities } from "@/services/composio";
+import { sendChatMessage, createWidget } from "@/services/llm-service";
 import { ChatList } from "./ChatList";
 import { ChatInput } from "./ChatInput";
 import { ChatHeader } from "./ChatHeader";
@@ -290,22 +291,19 @@ const ChatInterface = () => {
       const mcpData = await checkForMCPRelevance(userMessage.content);
       console.log("MCP data for request:", mcpData);
       
-      const response = await supabase.functions.invoke('llm-chat', {
-        body: { 
-          message: userMessage.content, 
-          chatId,
-          mcpData: mcpData
-        },
+      const response = await sendChatMessage({
+        content: userMessage.content,
+        chatId: chatId
       });
       
-      console.log('LLM response:', response.data);
+      console.log('LLM response:', response);
       
-      if (response.data && response.data.type === "widget_creation") {
-        const widgetId = await saveWidgetToDatabase(response.data.widget);
+      if (response.type === "widget_creation" && response.widget) {
+        const widgetId = await saveWidgetToDatabase(response.widget);
         
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
-          content: `${response.data.message} You can view it in the Widgets page or [click here](#) to see it now.`,
+          content: `${response.message} You can view it in the Widgets page or [click here](#) to see it now.`,
           sender: "ai",
           timestamp: new Date()
         };
@@ -323,7 +321,7 @@ const ChatInterface = () => {
           
         toast({
           title: "Widget Created!",
-          description: `"${response.data.widget.name}" has been added to your widgets.`,
+          description: `"${response.widget.name}" has been added to your widgets.`,
           action: (
             <Button 
               variant="outline"
@@ -337,7 +335,7 @@ const ChatInterface = () => {
       } else {
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
-          content: response.data?.message || "I'm processing your request. This is a placeholder response.",
+          content: response.message || "I'm processing your request. This is a placeholder response.",
           sender: "ai",
           timestamp: new Date()
         };

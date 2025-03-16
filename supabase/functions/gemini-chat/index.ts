@@ -126,15 +126,19 @@ Provide your response in this exact JSON format:
     }
     
     // Make the request to Gemini API
+    // Changed to use Authorization header instead of query parameter
     let response;
     try {
-      response = await fetch(GEMINI_API_URL + `?key=${GEMINI_API_KEY}`, {
+      response = await fetch(GEMINI_API_URL, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "x-goog-api-key": GEMINI_API_KEY
         },
         body: JSON.stringify(requestBodyForGemini)
       });
+      
+      console.log("Gemini API response status:", response.status);
     } catch (fetchError) {
       console.error("Network error when calling Gemini API:", fetchError);
       return new Response(

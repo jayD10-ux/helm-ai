@@ -96,9 +96,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
         <div className="prose prose-neutral dark:prose-invert">
           <ReactMarkdown
             components={{
-              code: ({ className, children, ...props }) => {
+              code: ({ inline, className, children, ...props }) => {
                 const language = className ? className.replace("language-", "") : "";
-                const isCodeBlock = className && !props.inline;
+                const isCodeBlock = !inline && className;
                 const code = String(children).replace(/\n$/, "");
                 
                 if (!isCodeBlock) {

@@ -22,7 +22,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           error: "API key not configured",
-          text: "I'm having trouble connecting to Gemini right now. The API key is not configured."
+          text: "I'm having trouble connecting to Gemini right now. The API key is not configured.",
+          status: 500
         }),
         { 
           status: 500, 
@@ -37,14 +38,16 @@ serve(async (req) => {
       requestBody = await req.json();
       console.log("Request received:", JSON.stringify({
         isWidgetRequest: requestBody.isWidgetRequest,
-        contentLength: requestBody.content?.length || 0
+        contentLength: requestBody.content?.length || 0,
+        debugMode: requestBody.debugMode || false
       }));
     } catch (parseError) {
       console.error("Error parsing request JSON:", parseError);
       return new Response(
         JSON.stringify({ 
           error: "Invalid request format",
-          text: "I'm having trouble processing your request. Please try again."
+          text: "I'm having trouble processing your request. Please try again.",
+          status: 400
         }),
         { 
           status: 400, 
@@ -53,14 +56,15 @@ serve(async (req) => {
       );
     }
 
-    const { content, isWidgetRequest, systemPrompt } = requestBody;
+    const { content, isWidgetRequest, systemPrompt, debugMode } = requestBody;
     
     if (!content) {
       console.error("Missing 'content' in request");
       return new Response(
         JSON.stringify({ 
           error: "Missing content in request",
-          text: "I couldn't process your request. Please provide a message."
+          text: "I couldn't process your request. Please provide a message.",
+          status: 400
         }),
         { 
           status: 400, 
@@ -91,7 +95,7 @@ Provide your response in this exact JSON format:
     "description": "Brief description of widget functionality",
     "type": "dashboard",
     "config": {},
-    "code": "export default function Widget() {\n// Complete React component code here\n}"
+    "code": "export default function Widget() {\\n// Complete React component code here\\n}"
   },
   "message": "Explanation of what you've created"
 }
@@ -117,15 +121,17 @@ Provide your response in this exact JSON format:
     };
 
     console.log("Sending request to Gemini API");
+    if (debugMode) {
+      console.log("Request to Gemini:", JSON.stringify(requestBodyForGemini));
+    }
     
     // Make the request to Gemini API
     let response;
     try {
-      response = await fetch(GEMINI_API_URL, {
+      response = await fetch(GEMINI_API_URL + `?key=${GEMINI_API_KEY}`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${GEMINI_API_KEY}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(requestBodyForGemini)
       });
@@ -134,7 +140,8 @@ Provide your response in this exact JSON format:
       return new Response(
         JSON.stringify({ 
           error: `Network error: ${fetchError.message}`,
-          text: "I'm having trouble connecting to Gemini right now. Please try again in a moment."
+          text: "I'm having trouble connecting to Gemini right now. Please try again in a moment.",
+          status: 500
         }),
         { 
           status: 500, 
@@ -148,12 +155,16 @@ Provide your response in this exact JSON format:
     try {
       data = await response.json();
       console.log("Received response from Gemini API with status:", response.status);
+      if (debugMode) {
+        console.log("Gemini API response:", JSON.stringify(data).substring(0, 500) + "...");
+      }
     } catch (jsonError) {
       console.error("Error parsing Gemini API response:", jsonError);
       return new Response(
         JSON.stringify({ 
           error: `Error parsing response: ${jsonError.message}`,
-          text: "I received an invalid response from Gemini. Please try again."
+          text: "I received an invalid response from Gemini. Please try again.",
+          status: 500
         }),
         { 
           status: 500, 
@@ -168,7 +179,9 @@ Provide your response in this exact JSON format:
       return new Response(
         JSON.stringify({ 
           error: `Gemini API error: ${JSON.stringify(data)}`,
-          text: "Gemini API returned an error. Please try again later."
+          text: "Gemini API returned an error. Please try again later.",
+          details: data,
+          status: response.status
         }),
         { 
           status: response.status, 
@@ -182,7 +195,9 @@ Provide your response in this exact JSON format:
       return new Response(
         JSON.stringify({ 
           error: "No response generated from Gemini API",
-          text: "I couldn't generate a response. Please try again with a different request."
+          text: "I couldn't generate a response. Please try again with a different request.",
+          details: data,
+          status: 500
         }),
         { 
           status: 500, 
@@ -196,7 +211,9 @@ Provide your response in this exact JSON format:
       return new Response(
         JSON.stringify({ 
           error: "Invalid response structure from Gemini API",
-          text: "I received an unexpected response format. Please try again."
+          text: "I received an unexpected response format. Please try again.",
+          details: data,
+          status: 500
         }),
         { 
           status: 500, 
@@ -299,7 +316,8 @@ Provide your response in this exact JSON format:
     return new Response(
       JSON.stringify({ 
         error: `Unhandled error: ${error.message}`,
-        text: "An unexpected error occurred. Please try again."
+        text: "An unexpected error occurred. Please try again.",
+        status: 500
       }),
       { 
         status: 500, 

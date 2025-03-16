@@ -83,6 +83,24 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       DO NOT include any explanations, markdown formatting, or any text outside of this JSON structure. The entire response must be valid JSON.`;
     }
     
+    // Check if debug mode is enabled from user settings
+    let debugMode = false;
+    try {
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('debug_mode')
+        .limit(1)
+        .single();
+      
+      debugMode = settings?.debug_mode || false;
+    } catch (settingsError) {
+      console.log('Could not retrieve debug settings, defaulting to false');
+    }
+    
+    if (debugMode) {
+      console.log('Debug mode enabled for Gemini request');
+    }
+    
     try {
       console.log("Calling Gemini API via Supabase Edge Function");
       
@@ -91,7 +109,8 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
         body: {
           content: message.content,
           isWidgetRequest,
-          systemPrompt
+          systemPrompt,
+          debugMode
         }
       });
       
@@ -111,6 +130,9 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       
       if (geminiResponse.error) {
         console.error('Gemini API returned an error:', geminiResponse.error);
+        if (geminiResponse.details) {
+          console.error('Error details:', geminiResponse.details);
+        }
         toast.error("Gemini API error: " + geminiResponse.error);
         throw new Error(`Gemini API error: ${geminiResponse.error}`);
       }

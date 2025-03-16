@@ -9,12 +9,14 @@ declare namespace gemini {
     error?: string;
     rawOutput?: boolean;
     details?: any;
+    status?: number;
   }
 
   interface GeminiErrorResponse {
     error: string;
     text?: string;
     details?: any;
+    status?: number;
   }
 
   interface WidgetData {
@@ -51,5 +53,6 @@ declare namespace gemini {
     content: string;
     isWidgetRequest: boolean;
     systemPrompt?: string;
+    debugMode?: boolean;
   }
 }

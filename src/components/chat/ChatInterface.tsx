@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -5,6 +6,7 @@ import { useMCPServers } from "@/hooks/use-mcp-servers";
 import { supabase } from "@/lib/supabase";
 import { fetchMCPCapabilities } from "@/services/composio";
 import { sendChatMessage } from "@/services/llm-service";
+import { executeCode } from "@/services/e2b-service";
 import { ChatList } from "./ChatList";
 import { ChatInput } from "./ChatInput";
 import { ChatHeader } from "./ChatHeader";
@@ -12,6 +14,8 @@ import { ChatFooter } from "./ChatFooter";
 import { ChatHistory } from "./ChatHistory";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import DashboardDisplay from "../dashboard/DashboardDisplay";
 
 interface Message {
   id: string;
@@ -26,8 +30,6 @@ interface WidgetData {
   type: string;
   config: Record<string, any>;
   code?: string;
-  sandboxId?: string;
-  previewUrl?: string;
 }
 
 interface MCPData {
@@ -43,6 +45,13 @@ interface Chat {
   created_at: string;
 }
 
+interface SpreadsheetData {
+  headers: string[];
+  rows: any[];
+  fileName: string;
+  lastUpdated: Date;
+}
+
 const ChatInterface = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -50,7 +59,7 @@ const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
-      content: "Hello! I'm Helm AI, your assistant for working with AI models and MCPs (Model Context Protocols). How can I help you today?",
+      content: "Hello! I'm Helm AI, your assistant for data analysis and visualization. You can attach a spreadsheet and ask me to create dashboards with your data.",
       sender: "ai",
       timestamp: new Date()
     }
@@ -59,6 +68,9 @@ const ChatInterface = () => {
   const [chatId, setChatId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState<Chat[]>([]);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [dashboardCode, setDashboardCode] = useState<string | null>(null);
+  const [currentSpreadsheetData, setCurrentSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const scrollToBottom = () => {
@@ -140,7 +152,7 @@ const ChatInterface = () => {
         
         const welcomeMessage = {
           id: "1",
-          content: "Hello! I'm Helm AI, your assistant for working with AI models and MCPs (Model Context Protocols). How can I help you today?",
+          content: "Hello! I'm Helm AI, your assistant for data analysis and visualization. You can attach a spreadsheet and ask me to create dashboards with your data.",
           sender: "ai" as const,
           timestamp: new Date(),
           chat_id: data[0].id
@@ -211,70 +223,146 @@ const ChatInterface = () => {
     }
   };
 
-  const saveWidgetToDatabase = async (widgetData: WidgetData) => {
-    try {
-      const { code, ...widgetDataForDb } = widgetData;
-      
-      const { data, error } = await supabase
-        .from('widgets')
-        .insert([widgetDataForDb])
-        .select();
+  const isDashboardRequest = (message: string): boolean => {
+    const dashboardKeywords = [
+      'create dashboard', 'generate dashboard', 'build dashboard', 
+      'dashboard with', 'make dashboard', 'show dashboard',
+      'visualize data', 'create visualization', 'chart', 'graph'
+    ];
+    
+    const lowerMessage = message.toLowerCase();
+    return dashboardKeywords.some(keyword => lowerMessage.includes(keyword));
+  };
 
-      if (error) {
-        throw error;
+  const generateDashboardCode = async (query: string, data: SpreadsheetData) => {
+    try {
+      const prompt = `
+Generate a React dashboard using the following spreadsheet data:
+- Filename: ${data.fileName}
+- Headers: ${JSON.stringify(data.headers)}
+- Data sample: ${JSON.stringify(data.rows.slice(0, 5))}
+
+User query: "${query}"
+
+Create a comprehensive dashboard with Tailwind CSS and shadcn UI components that includes:
+1. Summary statistics for key metrics
+2. Appropriate charts based on the data (bar, line, pie, etc.)
+3. Data tables where appropriate
+4. Responsive layout
+
+The dashboard should be organized, visually appealing, and specifically address the user's query.
+Use react-charts library if needed for data visualization.
+
+The dashboard code should be complete and standalone, ready to render in a React component.
+Dashboard data should come from the 'data' prop (don't use the sample data directly).
+
+Only include the React component code, no imports or exports.
+      `;
+
+      const response = await sendChatMessage({
+        content: prompt,
+        chatId: null // Don't save this interaction to chat history
+      });
+
+      if (!response.message) {
+        throw new Error("Failed to generate dashboard code");
       }
 
-      return data[0].id;
+      // Extract code from the response
+      const codePattern = /```(?:jsx|tsx)?\s*([\s\S]*?)```/;
+      const codeMatch = response.message.match(codePattern);
+      
+      if (!codeMatch || !codeMatch[1]) {
+        throw new Error("No code found in the generated response");
+      }
+
+      // Return the extracted code
+      return codeMatch[1];
     } catch (error) {
-      console.error('Error saving widget:', error);
+      console.error("Error generating dashboard code:", error);
       throw error;
     }
   };
-  
-  const checkForMCPRelevance = async (userMessage: string) => {
-    const mcpKeywords = [
-      'google sheet', 'spreadsheet', 'document', 'file', 
-      'database', 'api', 'data', 'retrieve', 'get', 'fetch',
-      'connected', 'mcp', 'model context protocol'
-    ];
-    
-    const lowerMessage = userMessage.toLowerCase();
-    const isMCPRelevant = mcpKeywords.some(keyword => lowerMessage.includes(keyword));
-    
-    if (!isMCPRelevant || mcpServers.length === 0) {
-      return null;
+
+  const handleDashboardGeneration = async (userMessage: string, spreadsheetData: SpreadsheetData) => {
+    try {
+      setLoading(true);
+      setCurrentSpreadsheetData(spreadsheetData);
+      
+      // Generate dashboard code
+      const code = await generateDashboardCode(userMessage, spreadsheetData);
+      
+      // Create a complete React component with the code
+      const fullComponentCode = `
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { 
+  BarChart, Bar, LineChart, Line, PieChart, Pie, 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
+  Legend, ResponsiveContainer, Cell 
+} from 'recharts';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+${code}
+      `.trim();
+      
+      setDashboardCode(fullComponentCode);
+      
+      // Inform the user
+      const aiMessage = {
+        id: Date.now().toString(),
+        content: "I've generated a dashboard based on your data. Let me render it for you.",
+        sender: "ai" as const,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, aiMessage]);
+      
+      // Add a small delay to improve UX
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      setShowDashboard(true);
+      
+      // Acknowledge dashboard creation
+      const successMessage = {
+        id: (Date.now() + 1).toString(),
+        content: "Dashboard created successfully! You can explore your data visually now.",
+        sender: "ai" as const,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, successMessage]);
+      
+      toast.success("Dashboard generated successfully");
+      
+    } catch (error) {
+      console.error("Error generating dashboard:", error);
+      
+      const errorMessage = {
+        id: Date.now().toString(),
+        content: `I encountered an error while generating the dashboard: ${error instanceof Error ? error.message : "Unknown error"}. Please try again with a more specific query.`,
+        sender: "ai" as const,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      
+      toast.error("Failed to generate dashboard");
+    } finally {
+      setLoading(false);
     }
-    
-    const mcpData: MCPData[] = [];
-    
-    for (const server of mcpServers) {
-      if (server.status === "connected") {
-        try {
-          console.log(`Fetching capabilities for MCP server: ${server.name}`);
-          const capabilities = await fetchMCPCapabilities(server);
-          
-          mcpData.push({
-            serverId: server.id,
-            serverName: server.name,
-            capabilities: capabilities
-          });
-        } catch (error) {
-          console.error(`Error fetching capabilities for ${server.name}:`, error);
-        }
-      }
-    }
-    
-    return mcpData.length > 0 ? mcpData : null;
   };
   
-  const handleSendMessage = async (input: string) => {
+  const handleSendMessage = async (input: string, spreadsheetData?: any) => {
     if (input.trim() === "" || !chatId) return;
     
     try {
       setLoading(true);
       const userMessage: Message = {
         id: Date.now().toString(),
-        content: input,
+        content: spreadsheetData 
+          ? `${input} (with spreadsheet: ${spreadsheetData.fileName})` 
+          : input,
         sender: "user",
         timestamp: new Date()
       };
@@ -290,11 +378,20 @@ const ChatInterface = () => {
           timestamp: userMessage.timestamp
         }]);
       
-      const mcpData = await checkForMCPRelevance(userMessage.content);
+      // If the user has attached a spreadsheet and is requesting a dashboard
+      if (spreadsheetData && isDashboardRequest(input)) {
+        await handleDashboardGeneration(input, spreadsheetData);
+        return;
+      }
+      
+      // For regular messages or non-dashboard spreadsheet queries
+      const mcpData = spreadsheetData ? null : await checkForMCPRelevance(userMessage.content);
       console.log("MCP data for request:", mcpData);
       
       const response = await sendChatMessage({
-        content: userMessage.content,
+        content: spreadsheetData 
+          ? `The user has uploaded a spreadsheet named "${spreadsheetData.fileName}" with columns: ${spreadsheetData.headers.join(', ')}. Their query is: ${input}` 
+          : userMessage.content,
         chatId: chatId
       });
       
@@ -386,6 +483,60 @@ const ChatInterface = () => {
       setLoading(false);
     }
   };
+
+  const saveWidgetToDatabase = async (widgetData: WidgetData) => {
+    try {
+      const { data, error } = await supabase
+        .from('widgets')
+        .insert([widgetData])
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      return data[0].id;
+    } catch (error) {
+      console.error('Error saving widget:', error);
+      throw error;
+    }
+  };
+  
+  const checkForMCPRelevance = async (userMessage: string) => {
+    const mcpKeywords = [
+      'google sheet', 'spreadsheet', 'document', 'file', 
+      'database', 'api', 'data', 'retrieve', 'get', 'fetch',
+      'connected', 'mcp', 'model context protocol'
+    ];
+    
+    const lowerMessage = userMessage.toLowerCase();
+    const isMCPRelevant = mcpKeywords.some(keyword => lowerMessage.includes(keyword));
+    
+    if (!isMCPRelevant || mcpServers.length === 0) {
+      return null;
+    }
+    
+    const mcpData: MCPData[] = [];
+    
+    for (const server of mcpServers) {
+      if (server.status === "connected") {
+        try {
+          console.log(`Fetching capabilities for MCP server: ${server.name}`);
+          const capabilities = await fetchMCPCapabilities(server);
+          
+          mcpData.push({
+            serverId: server.id,
+            serverName: server.name,
+            capabilities: capabilities
+          });
+        } catch (error) {
+          console.error(`Error fetching capabilities for ${server.name}:`, error);
+        }
+      }
+    }
+    
+    return mcpData.length > 0 ? mcpData : null;
+  };
   
   return (
     <div className="flex flex-col h-full relative">
@@ -395,43 +546,61 @@ const ChatInterface = () => {
         onHistoryClick={() => setHistoryOpen(true)}
       />
       
-      <div className="flex-1 overflow-auto" style={{ paddingBottom: "120px" }}>
-        <ChatList 
-          messages={messages} 
-          ref={messagesEndRef}
-          isLoading={loading}
-        />
-        
-        {loading && messages[messages.length - 1]?.sender === "user" && (
-          <div className="flex items-start gap-3 p-4">
-            <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border bg-primary text-primary-foreground">
-              <div className="text-sm font-semibold">AI</div>
-            </div>
-            <div className="flex flex-col gap-2 min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="font-semibold">Helm AI</div>
+      {showDashboard && dashboardCode && currentSpreadsheetData ? (
+        <div className="flex-1 overflow-auto mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold">Generated Dashboard</h2>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDashboard(false)}
+            >
+              Return to Chat
+            </Button>
+          </div>
+          <DashboardDisplay 
+            code={dashboardCode} 
+            data={currentSpreadsheetData} 
+          />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto" style={{ paddingBottom: "120px" }}>
+          <ChatList 
+            messages={messages} 
+            ref={messagesEndRef}
+            isLoading={loading}
+          />
+          
+          {loading && messages[messages.length - 1]?.sender === "user" && (
+            <div className="flex items-start gap-3 p-4">
+              <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border bg-primary text-primary-foreground">
+                <div className="text-sm font-semibold">AI</div>
               </div>
-              <div className="prose prose-neutral dark:prose-invert">
-                <div className="flex items-center space-x-2">
-                  <div className="flex space-x-1">
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
+              <div className="flex flex-col gap-2 min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold">Helm AI</div>
+                </div>
+                <div className="prose prose-neutral dark:prose-invert">
+                  <div className="flex items-center space-x-2">
+                    <div className="flex space-x-1">
+                      <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
+                      <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
+                      <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
+                    </div>
+                    <span className="text-sm text-muted-foreground">AI is thinking...</span>
                   </div>
-                  <span className="text-sm text-muted-foreground">AI is thinking...</span>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       
       <div className="fixed bottom-0 right-0 bg-background pt-2 pb-4 z-10 w-[calc(100%-80px)]">
         <div className="max-w-[1200px] mx-auto px-4">
           <ChatInput 
             onSendMessage={handleSendMessage} 
             isLoading={loading}
-            placeholder="Type your message..."
+            placeholder="Ask me about your data or attach a spreadsheet..."
           />
           
           <ChatFooter isLoading={loading} />

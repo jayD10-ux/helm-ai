@@ -12,29 +12,18 @@ import { ChatFooter } from "./ChatFooter";
 import { ChatHistory } from "./ChatHistory";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { useSpreadsheet } from "@/context/SpreadsheetContext";
+import { ParsedSpreadsheet } from "@/services/spreadsheet-service";
 
 interface Message {
   id: string;
   content: string;
   sender: "user" | "ai";
   timestamp: Date;
-}
-
-interface WidgetData {
-  name: string;
-  description: string;
-  type: string;
-  config: Record<string, any>;
-  code?: string;
-  sandboxId?: string;
-  previewUrl?: string;
-}
-
-interface MCPData {
-  serverId: string;
-  serverName: string;
-  capabilities: any[];
-  data?: any;
+  attachedFile?: {
+    name: string;
+    type: string;
+  };
 }
 
 interface Chat {
@@ -211,13 +200,11 @@ const ChatInterface = () => {
     }
   };
 
-  const saveWidgetToDatabase = async (widgetData: WidgetData) => {
+  const saveWidgetToDatabase = async (widgetData: any) => {
     try {
-      const { code, ...widgetDataForDb } = widgetData;
-      
       const { data, error } = await supabase
         .from('widgets')
-        .insert([widgetDataForDb])
+        .insert([widgetData])
         .select();
 
       if (error) {
@@ -245,7 +232,7 @@ const ChatInterface = () => {
       return null;
     }
     
-    const mcpData: MCPData[] = [];
+    const mcpData: any[] = [];
     
     for (const server of mcpServers) {
       if (server.status === "connected") {
@@ -267,6 +254,21 @@ const ChatInterface = () => {
     return mcpData.length > 0 ? mcpData : null;
   };
   
+  const { setSpreadsheetData } = useSpreadsheet();
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  
+  const handleFileAttach = (file: File, parsedData: ParsedSpreadsheet) => {
+    setAttachedFile(file);
+    
+    // Save the parsed data to the spreadsheet context
+    setSpreadsheetData({
+      headers: parsedData.headers,
+      rows: parsedData.rows,
+      fileName: parsedData.fileName,
+      lastUpdated: new Date()
+    });
+  };
+  
   const handleSendMessage = async (input: string) => {
     if (input.trim() === "" || !chatId) return;
     
@@ -276,7 +278,13 @@ const ChatInterface = () => {
         id: Date.now().toString(),
         content: input,
         sender: "user",
-        timestamp: new Date()
+        timestamp: new Date(),
+        ...(attachedFile && {
+          attachedFile: {
+            name: attachedFile.name,
+            type: attachedFile.type
+          }
+        })
       };
       
       setMessages((prev) => [...prev, userMessage]);
@@ -287,27 +295,26 @@ const ChatInterface = () => {
           content: userMessage.content,
           sender: userMessage.sender,
           chat_id: chatId,
-          timestamp: userMessage.timestamp
+          timestamp: userMessage.timestamp,
+          ...(attachedFile && {
+            attached_file: {
+              name: attachedFile.name,
+              type: attachedFile.type
+            }
+          })
         }]);
+      
+      // Clear the attached file after sending
+      setAttachedFile(null);
       
       const mcpData = await checkForMCPRelevance(userMessage.content);
       console.log("MCP data for request:", mcpData);
       
-      const response = await sendChatMessage({
-        content: userMessage.content,
-        chatId: chatId
-      });
-      
-      console.log('LLM response:', response);
-      
-      if (response.type === "widget_creation" && response.widget) {
-        const { code, ...widgetForDb } = response.widget;
-        
-        const widgetId = await saveWidgetToDatabase(widgetForDb);
-        
+      // If there's an attached file, suggest going to the spreadsheet dashboard
+      if (attachedFile) {
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
-          content: `${response.message} You can view it in the Widgets page or [click here](#) to see it now.`,
+          content: `I see you've attached a spreadsheet named "${attachedFile.name}". Would you like to explore this data in the Spreadsheet Dashboard? You can ask questions about your data and generate visualizations there.`,
           sender: "ai",
           timestamp: new Date()
         };
@@ -324,36 +331,81 @@ const ChatInterface = () => {
           }]);
           
         toast({
-          title: "Widget Created!",
-          description: `"${response.widget.name}" has been added to your widgets.`,
+          title: "Spreadsheet attached",
+          description: "Your spreadsheet is ready for analysis.",
           action: (
             <Button 
               variant="outline"
-              className="px-2 py-1 text-xs"
-              onClick={() => navigate('/widgets')}
+              size="sm"
+              onClick={() => navigate('/spreadsheet')}
             >
-              View Widgets
+              Go to Dashboard
             </Button>
           )
         });
       } else {
-        const aiMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          content: response.message || "I'm processing your request. This is a placeholder response.",
-          sender: "ai",
-          timestamp: new Date()
-        };
+        const response = await sendChatMessage({
+          content: userMessage.content,
+          chatId: chatId
+        });
         
-        setMessages((prev) => [...prev, aiMessage]);
+        console.log('LLM response:', response);
         
-        await supabase
-          .from('messages')
-          .insert([{
-            content: aiMessage.content,
-            sender: aiMessage.sender,
-            chat_id: chatId,
-            timestamp: aiMessage.timestamp
-          }]);
+        if (response.type === "widget_creation" && response.widget) {
+          const { code, ...widgetForDb } = response.widget;
+          
+          const widgetId = await saveWidgetToDatabase(widgetForDb);
+          
+          const aiMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            content: `${response.message} You can view it in the Widgets page or [click here](#) to see it now.`,
+            sender: "ai",
+            timestamp: new Date()
+          };
+          
+          setMessages((prev) => [...prev, aiMessage]);
+          
+          await supabase
+            .from('messages')
+            .insert([{
+              content: aiMessage.content,
+              sender: aiMessage.sender,
+              chat_id: chatId,
+              timestamp: aiMessage.timestamp
+            }]);
+            
+          toast({
+            title: "Widget Created!",
+            description: `"${response.widget.name}" has been added to your widgets.`,
+            action: (
+              <Button 
+                variant="outline"
+                className="px-2 py-1 text-xs"
+                onClick={() => navigate('/widgets')}
+              >
+                View Widgets
+              </Button>
+            )
+          });
+        } else {
+          const aiMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            content: response.message || "I'm processing your request. This is a placeholder response.",
+            sender: "ai",
+            timestamp: new Date()
+          };
+          
+          setMessages((prev) => [...prev, aiMessage]);
+          
+          await supabase
+            .from('messages')
+            .insert([{
+              content: aiMessage.content,
+              sender: aiMessage.sender,
+              chat_id: chatId,
+              timestamp: aiMessage.timestamp
+            }]);
+        }
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -388,54 +440,20 @@ const ChatInterface = () => {
   };
   
   return (
-    <div className="flex flex-col h-full relative">
-      <ChatHeader 
-        onNewChat={createNewChat} 
-        isLoading={loading} 
-        onHistoryClick={() => setHistoryOpen(true)}
-      />
-      
-      <div className="flex-1 overflow-auto" style={{ paddingBottom: "120px" }}>
-        <ChatList 
-          messages={messages} 
-          ref={messagesEndRef}
+    <div className="flex flex-col items-center justify-center h-full relative">
+      <div className="w-full max-w-2xl px-4">
+        <div className="mb-12 text-center">
+          <h1 className="text-4xl font-bold mb-6 text-white">What can I help with?</h1>
+        </div>
+        
+        <ChatInput 
+          onSendMessage={handleSendMessage} 
+          onFileAttach={handleFileAttach}
           isLoading={loading}
+          placeholder="Ask anything"
         />
         
-        {loading && messages[messages.length - 1]?.sender === "user" && (
-          <div className="flex items-start gap-3 p-4">
-            <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-md border bg-primary text-primary-foreground">
-              <div className="text-sm font-semibold">AI</div>
-            </div>
-            <div className="flex flex-col gap-2 min-w-0">
-              <div className="flex items-center gap-2">
-                <div className="font-semibold">Helm AI</div>
-              </div>
-              <div className="prose prose-neutral dark:prose-invert">
-                <div className="flex items-center space-x-2">
-                  <div className="flex space-x-1">
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "0ms" }}></div>
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "300ms" }}></div>
-                    <div className="h-2 w-2 rounded-full bg-neutral-400 animate-pulse" style={{ animationDelay: "600ms" }}></div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">AI is thinking...</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <div className="fixed bottom-0 right-0 bg-background pt-2 pb-4 z-10 w-[calc(100%-80px)]">
-        <div className="max-w-[1200px] mx-auto px-4">
-          <ChatInput 
-            onSendMessage={handleSendMessage} 
-            isLoading={loading}
-            placeholder="Type your message..."
-          />
-          
-          <ChatFooter isLoading={loading} />
-        </div>
+        <ChatFooter isLoading={loading} />
       </div>
       
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>

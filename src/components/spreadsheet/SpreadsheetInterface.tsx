@@ -6,7 +6,6 @@ import { fadeIn } from "@/components/ui/motion";
 import { Sparkles, FileSpreadsheet, BarChart3, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { parseSpreadsheetFile } from "@/services/spreadsheet-service";
 import FileUpload from "./FileUpload";
 import QueryInput from "./QueryInput";
 import VisualizationGrid from "./VisualizationGrid";
@@ -22,24 +21,6 @@ const SpreadsheetInterface = () => {
   } = useSpreadsheet();
   
   const [showPreview, setShowPreview] = useState(false);
-
-  const handleFileUpload = async (file: File) => {
-    try {
-      setLoading(true);
-      
-      const parsedData = await parseSpreadsheetFile(file);
-      
-      setSpreadsheetData({
-        ...parsedData,
-        lastUpdated: new Date()
-      });
-      
-      setLoading(false);
-    } catch (error) {
-      console.error("Error processing file:", error);
-      setLoading(false);
-    }
-  };
 
   return (
     <motion.div
@@ -71,7 +52,7 @@ const SpreadsheetInterface = () => {
       </div>
       
       {!spreadsheetData ? (
-        <FileUpload onFileUpload={handleFileUpload} loading={loading} />
+        <FileUpload />
       ) : (
         <div className="space-y-6">
           {showPreview && <SpreadsheetPreview />}

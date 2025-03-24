@@ -10,7 +10,7 @@ import * as XLSX from "xlsx";
 
 const FileUpload = () => {
   const { toast } = useToast();
-  const { setSpreadsheetData, setFileName } = useSpreadsheet();
+  const { setSpreadsheetData } = useSpreadsheet();
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,10 +72,9 @@ const FileUpload = () => {
       setSpreadsheetData({
         headers,
         rows,
-        fileName: file.name
+        fileName: file.name,
+        lastUpdated: new Date()
       });
-      
-      setFileName(file.name);
       
       toast({
         title: "File uploaded successfully",

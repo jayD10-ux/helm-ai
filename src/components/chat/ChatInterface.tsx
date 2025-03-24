@@ -1,6 +1,4 @@
-
 import React, { useState, useRef, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useMCPServers } from "@/hooks/use-mcp-servers";
 import { supabase } from "@/lib/supabase";
@@ -53,7 +51,6 @@ interface SpreadsheetData {
 }
 
 const ChatInterface = () => {
-  const { toast } = useToast();
   const navigate = useNavigate();
   const { mcpServers } = useMCPServers();
   const [messages, setMessages] = useState<Message[]>([
@@ -126,11 +123,7 @@ const ChatInterface = () => {
         }
       } catch (error) {
         console.error('Error loading chat:', error);
-        toast({
-          title: "Error loading chat history",
-          description: "Failed to load your previous conversations.",
-          variant: "destructive"
-        });
+        toast.error("Error loading chat history: Failed to load your previous conversations.");
       }
     };
     
@@ -171,18 +164,11 @@ const ChatInterface = () => {
         
         setChatHistory(prev => [data[0], ...prev]);
         
-        toast({
-          title: "New chat created",
-          description: "Started a fresh conversation with Helm AI."
-        });
+        toast.success("New chat created: Started a fresh conversation with Helm AI.");
       }
     } catch (error) {
       console.error('Error creating new chat:', error);
-      toast({
-        title: "Error creating new chat",
-        description: "Failed to start a new conversation.",
-        variant: "destructive"
-      });
+      toast.error("Error creating new chat: Failed to start a new conversation.");
     } finally {
       setLoading(false);
     }
@@ -213,11 +199,7 @@ const ChatInterface = () => {
       setHistoryOpen(false);
     } catch (error) {
       console.error('Error loading chat:', error);
-      toast({
-        title: "Error loading chat",
-        description: "Failed to load the selected conversation.",
-        variant: "destructive"
-      });
+      toast.error("Error loading chat: Failed to load the selected conversation.");
     } finally {
       setLoading(false);
     }
@@ -420,18 +402,11 @@ ${code}
             timestamp: aiMessage.timestamp
           }]);
           
-        toast({
-          title: "Widget Created!",
-          description: `"${response.widget.name}" has been added to your widgets.`,
-          action: (
-            <Button 
-              variant="outline"
-              className="px-2 py-1 text-xs"
-              onClick={() => navigate('/widgets')}
-            >
-              View Widgets
-            </Button>
-          )
+        toast.success("Widget Created!", {
+          action: {
+            label: "View Widgets",
+            onClick: () => navigate('/widgets')
+          }
         });
       } else {
         const aiMessage: Message = {
@@ -454,11 +429,7 @@ ${code}
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      toast({
-        title: "Error sending message",
-        description: "Failed to send your message.",
-        variant: "destructive"
-      });
+      toast.error("Error sending message: Failed to send your message.");
       
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),

@@ -4,7 +4,12 @@ import {
   MessageSquare, 
   Component, 
   Settings,
-  Network
+  Network,
+  Home,
+  LayoutGrid,
+  Settings2,
+  Code,
+  FileSpreadsheet
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -45,15 +50,41 @@ const NavItem = ({ icon: Icon, label, path, isActive, onClick }: NavItemProps) =
   );
 };
 
-const Sidebar = () => {
+export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const navItems = [
-    { icon: Terminal, label: "Chat", path: "/" },
-    { icon: Component, label: "Widgets", path: "/widgets" },
-    { icon: MessageSquare, label: "MCPs", path: "/mcps" },
-    { icon: Settings, label: "Settings", path: "/settings" },
+  const navigationItems = [
+    {
+      name: "Chat",
+      href: "/",
+      icon: Home,
+    },
+    {
+      name: "Widgets",
+      href: "/widgets",
+      icon: LayoutGrid,
+    },
+    {
+      name: "MCPs",
+      href: "/mcps",
+      icon: Network,
+    },
+    {
+      name: "Playground",
+      href: "/playground",
+      icon: Code,
+    },
+    {
+      name: "Spreadsheets",
+      href: "/spreadsheet",
+      icon: FileSpreadsheet,
+    },
+    {
+      name: "Settings",
+      href: "/settings",
+      icon: Settings2,
+    },
   ];
 
   return (
@@ -69,14 +100,14 @@ const Sidebar = () => {
 
         <div className="flex-1 py-4">
           <nav className="grid gap-4 px-2">
-            {navItems.map((item) => (
+            {navigationItems.map((item) => (
               <NavItem
-                key={item.path}
+                key={item.href}
                 icon={item.icon}
-                label={item.label}
-                path={item.path}
-                isActive={location.pathname === item.path}
-                onClick={() => navigate(item.path)}
+                label={item.name}
+                path={item.href}
+                isActive={location.pathname === item.href}
+                onClick={() => navigate(item.href)}
               />
             ))}
           </nav>

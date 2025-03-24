@@ -6,8 +6,13 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Input } from "@/components/ui/input";
 import { FileSpreadsheet, Search } from "lucide-react";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
-const SpreadsheetPreview = () => {
+interface SpreadsheetPreviewProps {
+  className?: string;
+}
+
+const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({ className }) => {
   const { spreadsheetData } = useSpreadsheet();
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -26,7 +31,7 @@ const SpreadsheetPreview = () => {
   const displayRows = filteredRows.slice(0, 100);
   
   return (
-    <Card>
+    <Card className={cn("", className)}>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-center">
           <CardTitle className="flex items-center">

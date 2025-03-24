@@ -3,21 +3,22 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useSpreadsheet } from "@/context/SpreadsheetContext";
 import { fadeIn } from "@/components/ui/motion";
-import { Sparkles, FileSpreadsheet, BarChart3, Plus, Upload } from "lucide-react";
+import { FileSpreadsheet, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import FileUpload from "./FileUpload";
 import QueryInput from "./QueryInput";
 import VisualizationGrid from "./VisualizationGrid";
 import SpreadsheetPreview from "./SpreadsheetPreview";
+import DashboardHeader from "./DashboardHeader";
+import DashboardSummary from "./DashboardSummary";
+import DataTable from "./DataTable";
 
 const SpreadsheetInterface = () => {
   const { 
     spreadsheetData, 
     setSpreadsheetData, 
     visualizations,
-    loading,
-    setLoading
+    loading
   } = useSpreadsheet();
   
   const [showPreview, setShowPreview] = useState(false);
@@ -25,66 +26,86 @@ const SpreadsheetInterface = () => {
   return (
     <motion.div
       {...fadeIn}
-      className="h-full"
+      className="h-full overflow-auto"
     >
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gradient">Spreadsheet Dashboard</h1>
-          <p className="text-muted-foreground">Upload a spreadsheet and generate insights with AI</p>
-        </div>
-        
-        {spreadsheetData && (
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowPreview(!showPreview)}
-            >
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
-              {showPreview ? "Hide Data" : "Show Data"}
-            </Button>
-            
-            <Button onClick={() => setSpreadsheetData(null)}>
-              <Upload className="h-4 w-4 mr-2" />
-              Upload New File
-            </Button>
-          </div>
-        )}
-      </div>
-      
       {!spreadsheetData ? (
-        <FileUpload />
+        <>
+          <DashboardHeader title="Spreadsheet Dashboard" />
+          <div className="py-12">
+            <FileUpload />
+          </div>
+        </>
       ) : (
-        <div className="space-y-6">
-          {showPreview && <SpreadsheetPreview />}
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <DashboardHeader title={spreadsheetData.fileName.split('.')[0]} />
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowPreview(!showPreview)}
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                {showPreview ? "Hide Data" : "Show Data"}
+              </Button>
+              
+              <Button onClick={() => setSpreadsheetData(null)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Upload New File
+              </Button>
+            </div>
+          </div>
           
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Sparkles className="h-5 w-5 mr-2 text-primary" />
-                Generate Visualizations with AI
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+          <DashboardSummary />
+          
+          {!showPreview && (
+            <div className="mb-6">
               <QueryInput />
-            </CardContent>
-          </Card>
+            </div>
+          )}
+          
+          {showPreview && <SpreadsheetPreview className="mb-6" />}
           
           {visualizations.length > 0 ? (
             <VisualizationGrid />
-          ) : (
-            <div className="mt-8 text-center p-12 border border-dashed rounded-lg">
-              <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No Visualizations Yet</h3>
-              <p className="text-muted-foreground mb-4">
-                Try asking a question about your data to generate insights
-              </p>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Create First Visualization
-              </Button>
+          ) : !showPreview && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              {spreadsheetData && spreadsheetData.rows.length > 0 && (
+                <DataTable
+                  title="Data Preview"
+                  description="First 5 rows from your spreadsheet"
+                  data={spreadsheetData.rows}
+                  columns={spreadsheetData.headers.slice(0, 5)}
+                  maxRows={5}
+                />
+              )}
+              
+              <div className="flex flex-col justify-between h-full">
+                <DataTable
+                  title="Column Analysis"
+                  description="Summary of your data columns"
+                  data={spreadsheetData.headers.map(header => {
+                    // Get some basic stats for each column
+                    const values = spreadsheetData.rows.map(row => row[header]);
+                    const uniqueValues = new Set(values).size;
+                    const numericValues = values.filter(v => 
+                      !isNaN(Number(v)) && v !== null && v !== ''
+                    ).length;
+                    
+                    return {
+                      Column: header,
+                      "Data Type": numericValues > values.length * 0.8 ? "Numeric" : "Text",
+                      "Unique Values": uniqueValues,
+                      "% Complete": Math.round((values.filter(v => v !== null && v !== '').length / values.length) * 100) + '%'
+                    };
+                  })}
+                  columns={["Column", "Data Type", "Unique Values", "% Complete"]}
+                  maxRows={4}
+                />
+              </div>
             </div>
           )}
-        </div>
+        </>
       )}
     </motion.div>
   );

@@ -241,24 +241,30 @@ Dashboard data should come from the 'data' prop (don't use the sample data direc
 Only include the React component code, no imports or exports.
       `;
 
-      const response = await sendChatMessage({
-        content: prompt,
-        chatId: null // Don't save this interaction to chat history
+      const { data: response, error } = await supabase.functions.invoke("openai-chat", {
+        body: {
+          content: prompt,
+          systemPrompt: "You are an expert dashboard and data visualization developer. You excel at creating React components with Tailwind CSS and shadcn/ui.",
+          modelType: "gpt-4o",
+          debugMode: false
+        }
       });
 
-      if (!response.message) {
-        throw new Error("Failed to generate dashboard code");
+      if (error) {
+        throw new Error(`Failed to generate dashboard code: ${error.message}`);
       }
 
-      // Extract code from the response
+      if (!response || !response.text) {
+        throw new Error("Empty response from OpenAI");
+      }
+
       const codePattern = /```(?:jsx|tsx)?\s*([\s\S]*?)```/;
-      const codeMatch = response.message.match(codePattern);
+      const codeMatch = response.text.match(codePattern);
       
       if (!codeMatch || !codeMatch[1]) {
         throw new Error("No code found in the generated response");
       }
 
-      // Return the extracted code
       return codeMatch[1];
     } catch (error) {
       console.error("Error generating dashboard code:", error);
@@ -271,10 +277,17 @@ Only include the React component code, no imports or exports.
       setLoading(true);
       setCurrentSpreadsheetData(spreadsheetData);
       
-      // Generate dashboard code
+      const userRequestMessage = {
+        id: Date.now().toString(),
+        content: "I'm generating a dashboard for you based on your spreadsheet data. This may take a moment...",
+        sender: "ai" as const,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, userRequestMessage]);
+      
       const code = await generateDashboardCode(userMessage, spreadsheetData);
       
-      // Create a complete React component with the code
       const fullComponentCode = `
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -290,9 +303,8 @@ ${code}
       
       setDashboardCode(fullComponentCode);
       
-      // Inform the user
       const aiMessage = {
-        id: Date.now().toString(),
+        id: (Date.now() + 1).toString(),
         content: "I've generated a dashboard based on your data. Let me render it for you.",
         sender: "ai" as const,
         timestamp: new Date()
@@ -300,14 +312,12 @@ ${code}
       
       setMessages(prev => [...prev, aiMessage]);
       
-      // Add a small delay to improve UX
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       setShowDashboard(true);
       
-      // Acknowledge dashboard creation
       const successMessage = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + 2).toString(),
         content: "Dashboard created successfully! You can explore your data visually now.",
         sender: "ai" as const,
         timestamp: new Date()
@@ -334,7 +344,7 @@ ${code}
       setLoading(false);
     }
   };
-  
+
   const handleSendMessage = async (input: string, spreadsheetData?: any) => {
     if (input.trim() === "" || !chatId) return;
     
@@ -360,13 +370,11 @@ ${code}
           timestamp: userMessage.timestamp
         }]);
       
-      // If the user has attached a spreadsheet and is requesting a dashboard
       if (spreadsheetData && isDashboardRequest(input)) {
         await handleDashboardGeneration(input, spreadsheetData);
         return;
       }
       
-      // For regular messages or non-dashboard spreadsheet queries
       const mcpData = spreadsheetData ? null : await checkForMCPRelevance(userMessage.content);
       console.log("MCP data for request:", mcpData);
       

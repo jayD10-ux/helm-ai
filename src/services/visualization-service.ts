@@ -17,7 +17,7 @@ export const generateVisualization = async (
   spreadsheetData: SpreadsheetData
 ): Promise<GeneratedVisualization> => {
   try {
-    // Prepare data for the Gemini API
+    // Prepare data for the OpenAI API
     const { headers, rows } = spreadsheetData;
     
     // Get a sample of the data (max 20 rows for the prompt)
@@ -31,18 +31,18 @@ export const generateVisualization = async (
       fileName: spreadsheetData.fileName
     };
     
-    console.log("Sending visualization request to Gemini...");
+    console.log("Sending visualization request to OpenAI...");
     
     // Call the Supabase Edge Function
     const { data: response, error } = await supabase.functions.invoke(
-      "generate-visualization",
+      "openai-visualization",
       {
         body: prompt
       }
     );
     
     if (error) {
-      console.error("Error calling Gemini API:", error);
+      console.error("Error calling OpenAI API:", error);
       throw new Error(`Failed to generate visualization: ${error.message}`);
     }
     

@@ -30,8 +30,8 @@ const ApiSettings = ({
             onChange={(e) => setModelType(e.target.value)}
             className="w-full bg-card border border-border rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            <option value="gemini-2.0-flash">Gemini 2.0 Flash (Default)</option>
-            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+            <option value="gpt-4o-mini">GPT-4o Mini (Default)</option>
+            <option value="gpt-4o">GPT-4o (Advanced)</option>
           </select>
           <p className="text-sm text-muted-foreground">
             Select the AI model to use for Helm AI
@@ -42,20 +42,20 @@ const ApiSettings = ({
           <div className="space-y-0.5">
             <Label htmlFor="useEdgeFunction">Use Supabase Edge Function</Label>
             <p className="text-sm text-muted-foreground">
-              Securely connect to Gemini API through Supabase Edge Functions
+              Securely connect to OpenAI API through Supabase Edge Functions
             </p>
           </div>
           <Switch id="useEdgeFunction" checked={true} disabled />
         </div>
         
         <div className="rounded-md bg-muted p-4">
-          <div className="text-sm font-medium">About Gemini Integration</div>
+          <div className="text-sm font-medium">About OpenAI Integration</div>
           <p className="text-sm text-muted-foreground mt-2">
-            Helm AI uses Google's Gemini 2.0 Flash for all AI capabilities. This model offers excellent
-            code generation capabilities with high performance and lower costs compared to other models.
+            Helm AI uses OpenAI's models for all AI capabilities. GPT-4o Mini offers excellent
+            performance at lower cost, while GPT-4o provides more advanced capabilities for complex tasks.
           </p>
           <p className="text-sm text-muted-foreground mt-2">
-            The Gemini API key is securely stored in Supabase Edge Function Secrets and not exposed to the client.
+            Your OpenAI API key is securely stored in Supabase Edge Function Secrets and not exposed to the client.
           </p>
         </div>
       </CardContent>

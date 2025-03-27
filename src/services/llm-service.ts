@@ -1,3 +1,4 @@
+
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 
@@ -23,7 +24,7 @@ interface LLMResponse {
 
 export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse> => {
   try {
-    console.log(`Sending message to Gemini: "${message.content}"`);
+    console.log(`Sending message to OpenAI: "${message.content}"`);
     
     // Check if this is a widget creation request
     const isWidgetRequest = detectWidgetCreationIntent(message.content);
@@ -76,61 +77,77 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
       console.log('Could not retrieve debug settings, defaulting to false');
     }
     
+    // Get the model type from user settings
+    let modelType = "gpt-4o-mini"; // Default model
+    try {
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('model_type')
+        .limit(1)
+        .single();
+      
+      modelType = settings?.model_type || "gpt-4o-mini";
+    } catch (settingsError) {
+      console.log('Could not retrieve model type settings, defaulting to gpt-4o-mini');
+    }
+    
     if (debugMode) {
-      console.log('Debug mode enabled for Gemini request');
+      console.log('Debug mode enabled for OpenAI request');
+      console.log('Using model:', modelType);
     }
     
     try {
-      console.log("Calling Gemini API via Supabase Edge Function");
+      console.log("Calling OpenAI API via Supabase Edge Function");
       
-      // Call Gemini via Supabase Edge Function
-      const { data: geminiResponse, error } = await supabase.functions.invoke("gemini-chat", {
+      // Call OpenAI via Supabase Edge Function
+      const { data: openaiResponse, error } = await supabase.functions.invoke("openai-chat", {
         body: {
           content: message.content,
           isWidgetRequest,
           systemPrompt,
-          debugMode
+          debugMode,
+          modelType
         }
       });
       
       if (error) {
-        console.error('Error with Gemini API invocation:', error);
-        toast.error("Failed to connect to Gemini API");
+        console.error('Error with OpenAI API invocation:', error);
+        toast.error("Failed to connect to OpenAI API");
         throw new Error(`Supabase edge function error: ${error.message}`);
       }
       
-      console.log('Gemini raw response:', geminiResponse);
+      console.log('OpenAI raw response:', openaiResponse);
       
-      if (!geminiResponse) {
-        console.error('Empty response from Gemini API');
-        toast.error("Received empty response from Gemini API");
-        throw new Error("Empty response from Gemini API");
+      if (!openaiResponse) {
+        console.error('Empty response from OpenAI API');
+        toast.error("Received empty response from OpenAI API");
+        throw new Error("Empty response from OpenAI API");
       }
       
-      if (geminiResponse.error) {
-        console.error('Gemini API returned an error:', geminiResponse.error);
-        if (geminiResponse.details) {
-          console.error('Error details:', geminiResponse.details);
+      if (openaiResponse.error) {
+        console.error('OpenAI API returned an error:', openaiResponse.error);
+        if (openaiResponse.details) {
+          console.error('Error details:', openaiResponse.details);
         }
-        toast.error("Gemini API error: " + geminiResponse.error);
-        throw new Error(`Gemini API error: ${geminiResponse.error}`);
+        toast.error("OpenAI API error: " + openaiResponse.error);
+        throw new Error(`OpenAI API error: ${openaiResponse.error}`);
       }
       
-      if (!geminiResponse.text) {
-        console.error('Missing text in Gemini response:', geminiResponse);
-        toast.error("Invalid response format from Gemini API");
-        throw new Error("Invalid response from Gemini API: missing text");
+      if (!openaiResponse.text) {
+        console.error('Missing text in OpenAI response:', openaiResponse);
+        toast.error("Invalid response format from OpenAI API");
+        throw new Error("Invalid response from OpenAI API: missing text");
       }
       
       // Process the response based on whether it's a widget creation request or not
       if (isWidgetRequest) {
         try {
           // For widget requests, check if we already have a parsed widget
-          if (geminiResponse.type === "widget_creation" && geminiResponse.widget) {
-            console.log('Successfully received widget response:', geminiResponse);
+          if (openaiResponse.type === "widget_creation" && openaiResponse.widget) {
+            console.log('Successfully received widget response:', openaiResponse);
             
             // Extract code if present, but don't save it to the database
-            const { code, ...widgetDataForDb } = geminiResponse.widget;
+            const { code, ...widgetDataForDb } = openaiResponse.widget;
             
             // Save the widget without the code property
             const widgetId = await createWidget(widgetDataForDb);
@@ -138,7 +155,7 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
             // Return the full response including code for frontend use
             return {
               type: "widget_creation",
-              message: geminiResponse.message || "Widget created successfully!",
+              message: openaiResponse.message || "Widget created successfully!",
               widget: {
                 ...widgetDataForDb,
                 code: code
@@ -147,11 +164,11 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
           }
           
           // If we have rawOutput flag, the edge function couldn't parse the JSON
-          if (geminiResponse.rawOutput) {
+          if (openaiResponse.rawOutput) {
             console.log('Received raw output, attempting to extract widget data');
             
             // Try to extract JSON with regex (fallback)
-            const responseText = geminiResponse.text;
+            const responseText = openaiResponse.text;
             console.log('Response text for widget creation:', responseText.substring(0, 200) + '...');
             
             const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
@@ -204,7 +221,7 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
         }
       } else {
         // For regular chat, just return the text response
-        const responseText = geminiResponse.text;
+        const responseText = openaiResponse.text;
         
         // Save the conversation to chat history if we have a chat ID
         if (message.chatId) {
@@ -229,13 +246,13 @@ export const sendChatMessage = async (message: ChatMessage): Promise<LLMResponse
         };
       }
     } catch (error) {
-      console.error('Error with Gemini integration:', error);
-      toast.error("Error connecting to Gemini: " + error.message);
+      console.error('Error with OpenAI integration:', error);
+      toast.error("Error connecting to OpenAI: " + error.message);
       
       // Return a user-friendly error message
       return {
         type: "text",
-        message: "I'm having trouble connecting to Gemini right now. Please try again in a moment."
+        message: "I'm having trouble connecting to OpenAI right now. Please try again in a moment."
       };
     }
   } catch (error) {

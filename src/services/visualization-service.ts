@@ -1,7 +1,6 @@
 
 import { supabase } from "@/lib/supabase";
 import { SpreadsheetData } from "@/context/SpreadsheetContext";
-import { generateVisualizationComponent } from "./component-generator";
 import { executeCode } from "./e2b-service";
 import { toast } from "sonner";
 

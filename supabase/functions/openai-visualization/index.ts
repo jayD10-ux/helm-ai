@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import "https://deno.land/x/xhr@0.2.1/mod.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
@@ -21,184 +21,165 @@ serve(async (req) => {
     if (!OPENAI_API_KEY) {
       console.error("OPENAI_API_KEY is not set in environment variables");
       return new Response(
-        JSON.stringify({ 
-          error: "API key not configured",
-          status: 500
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: "API key not configured" }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Parse request body
-    const requestData = await req.json();
-    const { query, headers, dataSample, fileName } = requestData;
-
-    console.log("Received visualization request:", {
-      query,
-      fileName,
-      headers,
-      sampleSize: dataSample.length
-    });
-
-    // Prepare the prompt for OpenAI
+    const requestBody = await req.json();
+    const { query, headers, dataSample, fileName, technologies } = requestBody;
+    
+    if (!query || !headers || !dataSample) {
+      console.error("Missing required parameters:", { query, headers, dataSample });
+      return new Response(
+        JSON.stringify({ error: "Missing required parameters" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Build the prompt for OpenAI
     const systemPrompt = `
-You are an expert data visualization system that generates React & Recharts code from spreadsheet data.
+You are an expert data visualization developer specialized in creating React components with Tailwind CSS. 
+Your task is to create a visualization based on spreadsheet data and a user query.
 
-Task: Generate a visualization component based on a natural language query.
+Rules:
+1. ALWAYS create React functional components using the latest best practices
+2. ALWAYS use Tailwind CSS for styling
+3. Use the recharts library for charts (BarChart, LineChart, PieChart, AreaChart, etc.)
+4. Make visualizations responsive and visually appealing
+5. Include proper error handling and loading states
+6. Follow clean code principles
+7. Your component should be named "Visualization" and take a "data" prop
+8. DO NOT import any external libraries other than React and recharts
+9. DO NOT include import statements or export statements
+10. Include proper TypeScript type definitions
 
-Guidelines:
-1. Generate clean, efficient React code that uses Recharts library.
-2. Analyze the data sample to determine best visualization.
-3. Use appropriate chart types (bar, line, pie, area) based on the data and query.
-4. Return valid JSX React components with Recharts.
-5. Don't include imports or exports, just the component definition.
-6. Focus on generating accurate data transformations.
-7. Keep the code simple yet effective.
-
-Available components from Recharts: 
-LineChart, BarChart, PieChart, AreaChart, Line, Bar, Pie, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell, ResponsiveContainer
-
-DO NOT use any other external components or imports in your code.
-
-Your response MUST be in this exact JSON format:
+The response MUST be in the following JSON format:
 {
-  "title": "Chart Title",
-  "description": "Brief description of the visualization",
-  "type": "bar|line|pie|area|table", 
-  "code": "JSX React component for the visualization",
-  "visualizationData": [] // Transformed data for the visualization
+  "title": "A concise title for the visualization",
+  "description": "A brief description of what the visualization shows",
+  "type": "bar|line|pie|area|table|custom",
+  "code": "// The full React component code",
+  "visualizationData": // Optional pre-processed data to be used by the visualization
 }
 `;
 
-    // Prepare sample data for the prompt
-    const dataStr = JSON.stringify(dataSample, null, 2);
-    
     const userPrompt = `
-I need to visualize data from my spreadsheet "${fileName}" based on this query: "${query}"
+Create a visualization based on this query: "${query}"
 
-Here are the column headers: ${JSON.stringify(headers)}
+Spreadsheet Information:
+- Filename: ${fileName}
+- Headers: ${JSON.stringify(headers)}
+- Data Sample (first ${dataSample.length} rows): ${JSON.stringify(dataSample, null, 2)}
 
-Here's a sample of the data (first ${dataSample.length} rows):
-${dataStr}
+Technologies:
+- Frontend: ${technologies?.frontend || "React"}
+- Styling: ${technologies?.styling || "Tailwind CSS"}
 
-Generate a visualization component that best addresses my query. Focus on exactly what I asked for.
+Requirements:
+1. The visualization should directly address the user's query
+2. Provide a high-quality, professional visualization component
+3. Use appropriate chart types based on the data
+4. Include data transformations if needed
+5. Make sure the component is fully functional
+6. Use proper TypeScript types
+7. The component should be self-contained
 `;
 
-    // Prepare the request for OpenAI
-    const openaiRequest = {
-      model: "gpt-4o", // Using the most capable model for code generation
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      temperature: 0.2,
-      max_tokens: 4096
-    };
+    console.log("Sending request to OpenAI API...");
 
-    console.log("Sending request to OpenAI API");
-    
-    // Call the OpenAI API
+    // Make the request to OpenAI API
     const response = await fetch(OPENAI_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${OPENAI_API_KEY}`
       },
-      body: JSON.stringify(openaiRequest)
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.2, // Lower temperature for more deterministic coding output
+        max_tokens: 4000
+      })
     });
-    
-    const responseData = await response.json();
+
+    const data = await response.json();
     
     if (!response.ok) {
-      console.error("OpenAI API error:", responseData);
+      console.error("OpenAI API error:", data);
       return new Response(
-        JSON.stringify({ 
-          error: `OpenAI API error: ${JSON.stringify(responseData)}`,
-          status: response.status
-        }),
-        { 
-          status: response.status, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: "Error from OpenAI API: " + (data.error?.message || "Unknown error") }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!responseData.choices || responseData.choices.length === 0) {
-      console.error("No choices returned from OpenAI API:", responseData);
+    if (!data.choices || data.choices.length === 0) {
+      console.error("No response from OpenAI API");
       return new Response(
-        JSON.stringify({ 
-          error: "No response generated from OpenAI API",
-          status: 500
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: "No response from OpenAI API" }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const generatedText = responseData.choices[0].message.content;
-    console.log("Generated text length:", generatedText.length);
-
-    // Extract the JSON response from the OpenAI output
+    const visualizationData = data.choices[0].message.content;
+    console.log("Received response from OpenAI");
+    
+    // Extract JSON from the response
+    let jsonData;
     try {
-      // Try to extract JSON using regex patterns
-      const jsonMatch = generatedText.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+      // Try to parse the entire response as JSON first
+      jsonData = JSON.parse(visualizationData);
+    } catch (parseError) {
+      console.log("Failed to parse response as JSON directly, attempting to extract JSON");
       
-      if (jsonMatch) {
-        const extractedJson = jsonMatch[1] || jsonMatch[0];
-        console.log("Extracted JSON:", extractedJson.substring(0, 200) + "...");
-        
-        const parsedResponse = JSON.parse(extractedJson);
-        
-        // Return the visualization data
-        return new Response(
-          JSON.stringify(parsedResponse),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      // If that fails, try to extract JSON from the response using regex
+      const jsonMatch = visualizationData.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+      if (jsonMatch && (jsonMatch[1] || jsonMatch[0])) {
+        try {
+          jsonData = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+        } catch (extractError) {
+          console.error("Failed to parse extracted JSON:", extractError);
+          return new Response(
+            JSON.stringify({ error: "Failed to parse visualization data" }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       } else {
-        // If we couldn't extract JSON, try to construct a basic response
-        console.log("Couldn't extract JSON, using raw text");
-        
+        console.error("No JSON found in response");
         return new Response(
-          JSON.stringify({
-            title: "Generated Visualization",
-            description: query,
-            type: "custom",
-            code: generatedText,
-            error: "Failed to parse structured response"
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: "No visualization data found in response" }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-    } catch (error) {
-      console.error("Error processing OpenAI response:", error);
+    }
+
+    // Validate the response
+    if (!jsonData.code || !jsonData.title || !jsonData.type) {
+      console.error("Invalid visualization data:", jsonData);
       return new Response(
-        JSON.stringify({ 
-          error: `Error processing response: ${error.message}`,
-          raw: generatedText,
-          status: 500
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        JSON.stringify({ error: "Invalid visualization data" }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-  } catch (error) {
-    console.error("Unhandled error in generate-visualization function:", error);
+
+    // Clean the code from any code block markers
+    if (jsonData.code.startsWith("```") && jsonData.code.endsWith("```")) {
+      jsonData.code = jsonData.code.substring(jsonData.code.indexOf("\n") + 1, jsonData.code.lastIndexOf("```"));
+    }
+
     return new Response(
-      JSON.stringify({ 
-        error: `Unhandled error: ${error.message}`,
-        status: 500
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify(jsonData),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error("Error in openai-visualization function:", error);
+    return new Response(
+      JSON.stringify({ error: error.message || "Unknown error occurred" }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

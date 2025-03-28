@@ -5,6 +5,9 @@ import "https://deno.land/x/xhr@0.2.1/mod.ts";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
+const SUPPORTED_MODELS = ['gpt-4o-mini', 'gpt-4o'];
+const DEFAULT_MODEL = 'gpt-4o';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -97,7 +100,7 @@ Requirements:
         "Authorization": `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: DEFAULT_MODEL, // Use gpt-4o for visualizations as they are more complex
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }

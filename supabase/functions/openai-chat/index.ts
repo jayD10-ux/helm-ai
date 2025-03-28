@@ -10,6 +10,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const SUPPORTED_MODELS = ['gpt-4o-mini', 'gpt-4o'];
+const DEFAULT_MODEL = 'gpt-4o-mini';
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -40,7 +43,8 @@ serve(async (req) => {
       console.log("Request received:", JSON.stringify({
         isWidgetRequest: requestBody.isWidgetRequest,
         contentLength: requestBody.content?.length || 0,
-        debugMode: requestBody.debugMode || false
+        debugMode: requestBody.debugMode || false,
+        modelType: requestBody.modelType || DEFAULT_MODEL
       }));
     } catch (parseError) {
       console.error("Error parsing request JSON:", parseError);
@@ -88,8 +92,15 @@ serve(async (req) => {
     // Add current date context to all prompts
     effectiveSystemPrompt = `Today is ${currentDate}. ${effectiveSystemPrompt}`;
     
-    // Default to gpt-4o-mini if not specified
-    const model = modelType || "gpt-4o-mini";
+    // Ensure we're using a supported model
+    let model = modelType || DEFAULT_MODEL;
+    if (!SUPPORTED_MODELS.includes(model)) {
+      console.warn(`Unsupported model '${model}' requested, falling back to ${DEFAULT_MODEL}`);
+      model = DEFAULT_MODEL;
+    }
+    
+    // Log the model being used
+    console.log(`Using OpenAI model: ${model}`);
     
     // If this is a widget creation request, use a specialized system prompt
     if (isWidgetRequest) {
@@ -194,7 +205,7 @@ DO NOT include a 'code' field in the widget object. The code will be provided se
       return new Response(
         JSON.stringify({ 
           error: `OpenAI API error: ${JSON.stringify(data)}`,
-          text: "OpenAI API returned an error. Please try again later.",
+          text: "I encountered an issue with the OpenAI service. Please try again later.",
           details: data,
           status: response.status
         }),
